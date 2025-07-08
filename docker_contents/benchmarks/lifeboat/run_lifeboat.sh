@@ -12,4 +12,5 @@ echo "Contents:"
 cat $config
 . $config
 
-./out/lifeboat-flat ${MODE} ${DIM0} ${DIM1} 
+export DARSHAN_ENABLE_NONMPI=1
+env LD_PRELOAD=/usr/local/lib/libdarshan.so ./out/lifeboat-flat ${MODE} ${DIM0} ${DIM1} 
