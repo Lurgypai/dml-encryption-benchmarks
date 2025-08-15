@@ -1,0 +1,3 @@
+MODE=crypt
+DIM0=32768
+DIM1=16384

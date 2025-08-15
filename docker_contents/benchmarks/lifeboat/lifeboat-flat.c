@@ -5,6 +5,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #define FILE    "h5ex_d_rdwr_crypt.h5"
 #define DATASET "DS1"
@@ -83,9 +84,15 @@ int main(int argc, char** argv)
     int DIM1 = atoi(argv[3]);
 
     hsize_t dims[2] = {DIM0, DIM1};
-    int     wdata[DIM0][DIM1]; /* Write buffer */
-    int     rdata[DIM0][DIM1]; /* Read buffer */
 
+    int** wdata = malloc(sizeof(int*) * DIM0);
+    int** rdata = malloc(sizeof(int*) * DIM0);
+
+    for(i = 0; i < DIM0; ++i) {
+        wdata[i] = malloc(sizeof(int) * DIM1);
+        rdata[i] = malloc(sizeof(int) * DIM1);
+    }
+    
     for (i = 0; i < DIM0; i++)
         for (j = 0; j < DIM1; j++)
             wdata[i][j] = i * j - j;
@@ -95,22 +102,31 @@ int main(int argc, char** argv)
     space = H5Screate_simple(2, dims, NULL);
     dset = H5Dcreate(file, DATASET, H5T_STD_I32LE, space, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
     // write and close
+
+    clock_t start, end;
+    double elapsed;
+
+    start = clock();
     status = H5Dwrite(dset, H5T_NATIVE_INT, H5S_ALL, H5S_ALL, H5P_DEFAULT, wdata[0]);
+    status = H5Fclose(file);
+    end = clock();
+
     status = H5Dclose(dset);
     status = H5Sclose(space);
-    status = H5Fclose(file);
+
+    elapsed = (double)(end - start) / CLOCKS_PER_SEC;
+    printf("Write: %f\n", elapsed);
 
     // open and read
     file = H5Fopen(FILE, H5F_ACC_RDONLY, fapl_id);
     dset = H5Dopen(file, DATASET, H5P_DEFAULT);
+
+    start = clock();
     status = H5Dread(dset, H5T_NATIVE_INT, H5S_ALL, H5S_ALL, H5P_DEFAULT, rdata[0]);
-    printf("%s:\n", DATASET);
-    for (i = 0; i < DIM0; i++) {
-        printf(" [");
-        for (j = 0; j < DIM1; j++)
-            printf(" %3d", rdata[i][j]);
-        printf("]\n");
-    }
+    end = clock();
+
+    elapsed = (double)(end - start) / CLOCKS_PER_SEC;
+    printf("Read: %f\n", elapsed);
 
     // cleanup
     status = H5Dclose(dset);

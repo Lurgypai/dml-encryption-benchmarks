@@ -2,7 +2,7 @@
 
 config=$1
 
-mkdir -p /workspace/output/lifeboat
+mkdir -p /workspace/output/adios
 
 if [[ ! -e ${config} ]]; then
     echo "Config file \"${config}\" doesn't exist."
@@ -15,5 +15,4 @@ cat $config
 . $config
 
 export DARSHAN_ENABLE_NONMPI=1
-env LD_PRELOAD=/usr/local/lib/libdarshan.so ./out/lifeboat-flat ${MODE} ${DIM0} ${DIM1} > /workspace/output/lifeboat/$(basename ${config})-out.txt
-
+env LD_PRELOAD=/usr/local/lib/libdarshan.so ./out/adios-benchmark ${MODE} ${DIM0} ${DIM1} > /workspace/output/adios/$(basename ${config})-out.txt

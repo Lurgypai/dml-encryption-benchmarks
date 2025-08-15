@@ -19,6 +19,7 @@ RUN apt update && apt install -y \
     vim \
     pkg-config \
     libz-dev \
+    libsodium-dev \
     && apt clean
 
 RUN git clone https://github.com/LifeboatLLC/HDF5-Encryption.git
@@ -26,6 +27,7 @@ RUN git clone https://github.com/LifeboatLLC/HDF5-Encryption.git
 COPY ./docker_contents .
 
 RUN ./build_lifeboat.sh
+RUN ./build_adios.sh
 RUN ./build_darshan.sh
 
 WORKDIR /workspace/benchmarks
