@@ -25,13 +25,21 @@ using namespace std::chrono;
 
 std::string key;
 
+// 16 ints X 16 ints is 4KiB
+constexpr std::size_t CHUNK_DIM{16};
+constexpr std::size_t CHUNK_SIZE{ CHUNK_DIM * CHUNK_DIM };
+
 void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int width, int height, int thread_w, int thread_h)
 {
+
+    int threadOffsetX = thread_w * rank;
+    int threadOffsetY = thread_h * rank;
+
     adios2::IO io = adios.DeclareIO("hello-world-writer");
     adios2::Variable<std::int32_t> var = io.DefineVariable<std::int32_t>(
         "Var",
         {width, height},                    // base dimensions
-        {thread_w * rank, thread_h * rank}, // thread offset
+        {threadOffsetX, threadOffsetY},     // thread offset
         {thread_w, thread_h}                // thread region
     );
 
@@ -47,14 +55,24 @@ void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int width, int height
 
     adios2::Engine writer = io.Open("benchmark_out.bp", adios2::Mode::Write);
 
-    writer.BeginStep();
     std::vector<std::int32_t> data;
-    data.resize(thread_w * thread_h);
-    for(int i = 0; i != thread_w * thread_h; ++i) {
+    data.resize(CHUNK_SIZE);
+    for(int i = 0; i != CHUNK_SIZE; ++i) {
         data[i] = i;
     }
-    
-    writer.Put(var, data.data());
+
+    writer.BeginStep();
+
+    int xSteps = thread_w / CHUNK_DIM;
+    int ySteps = thread_h / CHUNK_DIM;
+    for(int xStep = 0; xStep != xSteps; ++xStep) {
+        for(int yStep = 0; yStep != ySteps; ++yStep) {
+            adios2::Box<adios2::Dims> sel({xStep * CHUNK_DIM + threadOffsetX, yStep * CHUNK_DIM + threadOffsetY}, {CHUNK_DIM, CHUNK_DIM});
+            var.SetSelection(sel);
+            writer.Put(var, data.data());
+        }
+    }
+
 
     writer.EndStep();
     writer.Close();
@@ -77,11 +95,19 @@ void doRead(adios2::ADIOS &adios, bool doCrypt, int rank, int thread_w, int thre
         var.AddOperation("plugin", params);
     }
 
-    adios2::Box<adios2::Dims> sel({thread_w * rank, thread_h * rank}, {thread_w, thread_h});
-    var.SetSelection(sel);
-
     std::vector<std::int32_t> data;
-    reader.Get(var, data);
+
+    int xSteps = thread_w / CHUNK_DIM;
+    int ySteps = thread_h / CHUNK_DIM;
+    int threadOffsetX = thread_w * rank;
+    int threadOffsetY = thread_h * rank;
+    for(int xStep = 0; xStep != xSteps; ++xStep) {
+        for(int yStep = 0; yStep != ySteps; ++yStep) {
+            adios2::Box<adios2::Dims> sel({xStep * CHUNK_DIM + threadOffsetX, yStep * CHUNK_DIM + threadOffsetY}, {CHUNK_DIM, CHUNK_DIM});
+            var.SetSelection(sel);
+            reader.Get(var, data);
+        }
+    }
 
     reader.EndStep();
     reader.Close();
@@ -125,6 +151,11 @@ int main(int argc, char *argv[])
 
     std::uint64_t my_w = w / size;
     std::uint64_t my_h = h / size;
+
+    if(my_w % CHUNK_DIM != 0 || my_h % CHUNK_DIM != 0) {
+        if(rank == 0) std::cout << "Per thread dimensions are not evenly divisble, aborting.\n";
+        return 1;
+    }
 
     if(rank == 0) {
         std::cout << "Ranks: " << size << ", w: " << w << ", h: " << h << ", per rank w: " << my_w << ", per rank h: " << my_h << '\n';
