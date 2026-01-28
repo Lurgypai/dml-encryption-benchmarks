@@ -23,6 +23,8 @@
 
 using namespace std::chrono;
 
+std::string key;
+
 void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int width, int height, int thread_w, int thread_h)
 {
     adios2::IO io = adios.DeclareIO("hello-world-writer");
@@ -47,8 +49,8 @@ void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int width, int height
 
     writer.BeginStep();
     std::vector<std::int32_t> data;
-    data.resize(width * height);
-    for(int i = 0; i != width * height; ++i) {
+    data.resize(thread_w * thread_h);
+    for(int i = 0; i != thread_w * thread_h; ++i) {
         data[i] = i;
     }
     
@@ -114,7 +116,6 @@ int main(int argc, char *argv[])
     int rank, size;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size); 
-    printf("rank=%d size=%d pid=%d\n", rank, size, getpid());
 
     // not evenly divisible
     if(w % size != 0 || h % size != 0) {
@@ -127,21 +128,29 @@ int main(int argc, char *argv[])
 
     if(rank == 0) {
         std::cout << "Ranks: " << size << ", w: " << w << ", h: " << h << ", per rank w: " << my_w << ", per rank h: " << my_h << '\n';
+
+        // setup key
+        // I'm lazy so everything just uses a 0 initialized key
+        key.resize(16);
     }
 
 
     try
     {
         adios2::ADIOS adios(MPI_COMM_WORLD);
+        
+        MPI_Barrier(MPI_COMM_WORLD);
 
         // do and time write
         auto start = high_resolution_clock::now();
         doWrite(adios, doCrypt, rank, w, h, my_w, my_h);
+        MPI_Barrier(MPI_COMM_WORLD);
         duration<double> elapsed = high_resolution_clock::now() - start;
         if(rank == 0) std::cout << "Write: " << elapsed.count() << '\n';
 
         start = high_resolution_clock::now();
         doRead(adios, doCrypt, rank, my_w, my_h);
+        MPI_Barrier(MPI_COMM_WORLD);
         elapsed = high_resolution_clock::now() - start;
         if(rank == 0) std::cout << "Read: " << elapsed.count() << '\n';
     }

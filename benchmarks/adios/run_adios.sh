@@ -7,6 +7,7 @@ if [[ -z ${OUTPUT_DIR} ]]; then
     exit 1
 fi
 
+rm -r benchmark_out.bp
 mkdir ${OUTPUT_DIR}/adios
 
 if [[ ! -e ${config} ]]; then
@@ -19,6 +20,6 @@ echo "Contents:"
 cat $config
 . $config
 
-export MPICH_NEMESIS_NETMOD=ch3:sock
-mpiexec -n 16 --host localhost ./out/adios-benchmark ${MODE} ${DIM0} ${DIM1} > ${OUTPUT_DIR}/adios/$(basename ${config})-out.txt
+MPIRUN=srun
+${MPIRUN} ./out/adios-benchmark ${MODE} ${DIM0} ${DIM1} > ${OUTPUT_DIR}/adios/$(basename ${config})-out.txt
 

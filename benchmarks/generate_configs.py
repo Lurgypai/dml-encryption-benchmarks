@@ -2,14 +2,16 @@ import itertools
 import os
 
 modes = ["crypt", "def"]
-dims0 = [16384, 16384 * 2, 16384 * 4, 16384 * 8, 16384 * 16] # 1, 2, 4, 8, 16 GiB
+# 16, 32, 64, 128 GiB
+dims0 = [16384 * 16, 16384 * 32, 16384 * 64, 16384 * 128 ]
+# dims0 = [16384]
 dims1 = [16384]
 
 output_dir = "configs"
 
 # Generate combinations and write config files
 for mode, dim0, dim1 in itertools.product(modes, dims0, dims1):
-    filename = f"{mode}-{dim0:06d}-{dim1:06d}"
+    filename = f"{mode}-{dim0:09d}-{dim1:09d}"
     filepath = os.path.join(output_dir, filename)
 
     with open(filepath, "w") as f:
