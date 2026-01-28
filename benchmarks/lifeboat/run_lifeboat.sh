@@ -8,6 +8,7 @@ if [[ -z ${OUTPUT_DIR} ]]; then
 fi
 
 mkdir ${OUTPUT_DIR}/lifeboat
+rm h5ex_d_rdwr_crypt.h5
 
 if [[ ! -e ${config} ]]; then
     echo "Config file \"${config}\" doesn't exist."

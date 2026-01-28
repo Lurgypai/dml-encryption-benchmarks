@@ -54,6 +54,10 @@ static hid_t prepare_crypt() {
     return fapl_id;
 }
 
+// 4096
+#define CHUNK_DIM   (64 / sizeof(int))
+#define CHUNK_SIZE  (CHUNK_DIM * CHUNK_DIM)
+
 int main(int argc, char** argv)
 {
     hid_t   file  = H5I_INVALID_HID;
@@ -83,19 +87,17 @@ int main(int argc, char** argv)
     int DIM0 = atoi(argv[2]);
     int DIM1 = atoi(argv[3]);
 
-    hsize_t dims[2] = {DIM0, DIM1};
-
-    int** wdata = malloc(sizeof(int*) * DIM0);
-    int** rdata = malloc(sizeof(int*) * DIM0);
-
-    for(i = 0; i < DIM0; ++i) {
-        wdata[i] = malloc(sizeof(int) * DIM1);
-        rdata[i] = malloc(sizeof(int) * DIM1);
+    if(DIM0 % CHUNK_DIM != 0 || DIM1 % CHUNK_DIM != 0) {
+        printf("Error, dims are not separatable into chunks (dims size %d and %d, chunk size %dx%d)\n", DIM0, DIM1, CHUNK_DIM, CHUNK_DIM);
+        return -1;
     }
-    
-    for (i = 0; i < DIM0; i++)
-        for (j = 0; j < DIM1; j++)
-            wdata[i][j] = i * j - j;
+
+    int* buffer = malloc(CHUNK_SIZE * sizeof(int));
+    for(int i = 0; i != CHUNK_SIZE; ++i) {
+        buffer[i] = i;
+    }
+
+    hsize_t dims[2] = {DIM0, DIM1};
 
     // create
     file = H5Fcreate(FILE, H5F_ACC_TRUNC, H5P_DEFAULT, fapl_id);
@@ -103,11 +105,31 @@ int main(int argc, char** argv)
     dset = H5Dcreate(file, DATASET, H5T_STD_I32LE, space, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
     // write and close
 
+    int x_steps = DIM0 / CHUNK_DIM;
+    int y_steps = DIM1 / CHUNK_DIM;
+
     clock_t start, end;
     double elapsed;
 
     start = clock();
-    status = H5Dwrite(dset, H5T_NATIVE_INT, H5S_ALL, H5S_ALL, H5P_DEFAULT, wdata[0]);
+
+    hsize_t ioDims[2] = {CHUNK_DIM, CHUNK_DIM};
+    hid_t ioSpace = H5Screate_simple(2, ioDims, NULL);
+
+    for(int x_pos = 0; x_pos != x_steps; ++x_steps) {
+        for(int y_pos = 0; y_pos != y_steps; ++y_steps) {
+            hsize_t offset[2] = {x_pos * CHUNK_DIM, y_pos * CHUNK_DIM};
+            // select where to write to
+            H5Sselect_hyperslab(space,
+                    H5S_SELECT_SET,
+                    offset,
+                    NULL,
+                    ioDims,
+                    NULL );
+            status = H5Dwrite(dset, H5T_NATIVE_INT, ioSpace, space, H5P_DEFAULT, buffer);
+        }
+    }
+
     status = H5Fclose(file);
     end = clock();
 
@@ -120,9 +142,23 @@ int main(int argc, char** argv)
     // open and read
     file = H5Fopen(FILE, H5F_ACC_RDONLY, fapl_id);
     dset = H5Dopen(file, DATASET, H5P_DEFAULT);
+    space = H5Dget_space(dset);
 
     start = clock();
-    status = H5Dread(dset, H5T_NATIVE_INT, H5S_ALL, H5S_ALL, H5P_DEFAULT, rdata[0]);
+
+    for(int x_pos = 0; x_pos != x_steps; ++x_steps) {
+        for(int y_pos = 0; y_pos != y_steps; ++y_steps) {
+            hsize_t offset[2] = {x_pos * CHUNK_DIM, y_pos * CHUNK_DIM};
+            // select where to write to
+            H5Sselect_hyperslab(space,
+                    H5S_SELECT_SET,
+                    offset,
+                    NULL,
+                    ioDims,
+                    NULL );
+            status = H5Dread(dset, H5T_NATIVE_INT, ioSpace, space, H5P_DEFAULT, buffer);
+        }
+    }
     end = clock();
 
     elapsed = (double)(end - start) / CLOCKS_PER_SEC;
