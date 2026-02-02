@@ -10,7 +10,7 @@ CONFIG_DIR=$(realpath configs)
 # lifeboat
 pushd lifeboat
 for c in ${CONFIG_DIR}/*; do
-  # echo "running lifeboat benchmark on config $c"
+  echo "running lifeboat benchmark on config $c"
   ./run_lifeboat.sh $c
 done
 popd

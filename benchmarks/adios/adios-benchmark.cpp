@@ -26,7 +26,8 @@ using namespace std::chrono;
 std::string key;
 
 // 16 ints X 16 ints is 4KiB
-constexpr std::size_t CHUNK_DIM{16};
+// 512 X 512 ins is 1MiB
+constexpr std::size_t CHUNK_DIM{512};
 constexpr std::size_t CHUNK_SIZE{ CHUNK_DIM * CHUNK_DIM };
 
 void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int width, int height, int thread_w, int thread_h)

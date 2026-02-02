@@ -21,5 +21,6 @@ cat $config
 . $config
 
 export LD_LIBRARY_PATH=${DEP_DIR}/gcrypt-ins/lib/
-./out/lifeboat-flat ${MODE} ${DIM0} ${DIM1} > ${OUTPUT_DIR}/lifeboat/$(basename ${config})-out.txt
+# ./out/lifeboat-flat ${MODE} ${DIM0} ${DIM1} > ${OUTPUT_DIR}/lifeboat/$(basename ${config})-out.txt
+./out/lifeboat-flat ${MODE} ${DIM0} ${DIM1}
 

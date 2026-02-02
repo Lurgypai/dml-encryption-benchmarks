@@ -7,8 +7,8 @@ modes = ["crypt", "def"]
 # dims0 = [16384]
 # dims1 = [16384]
 
-dims0 = [64]
-dims1 = [64]
+dims0 = [1024]
+dims1 = [1024]
 
 output_dir = "configs"
 

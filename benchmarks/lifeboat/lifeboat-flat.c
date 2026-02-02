@@ -54,8 +54,8 @@ static hid_t prepare_crypt() {
     return fapl_id;
 }
 
-// 4096
-#define CHUNK_DIM   (64 / sizeof(int))
+// 512 x 512 ints is 1MiB
+#define CHUNK_DIM   (256)
 #define CHUNK_SIZE  (CHUNK_DIM * CHUNK_DIM)
 
 int main(int argc, char** argv)
@@ -116,8 +116,10 @@ int main(int argc, char** argv)
     hsize_t ioDims[2] = {CHUNK_DIM, CHUNK_DIM};
     hid_t ioSpace = H5Screate_simple(2, ioDims, NULL);
 
-    for(int x_pos = 0; x_pos != x_steps; ++x_steps) {
-        for(int y_pos = 0; y_pos != y_steps; ++y_steps) {
+    for(int x_pos = 0; x_pos != x_steps; ++x_pos) {
+        for(int y_pos = 0; y_pos != y_steps; ++y_pos) {
+            printf("writing chunk %d/%d, %d/%d\n", x_pos, x_steps, y_pos, y_steps);
+
             hsize_t offset[2] = {x_pos * CHUNK_DIM, y_pos * CHUNK_DIM};
             // select where to write to
             H5Sselect_hyperslab(space,
@@ -146,8 +148,11 @@ int main(int argc, char** argv)
 
     start = clock();
 
-    for(int x_pos = 0; x_pos != x_steps; ++x_steps) {
-        for(int y_pos = 0; y_pos != y_steps; ++y_steps) {
+    for(int x_pos = 0; x_pos != x_steps; ++x_pos) {
+        for(int y_pos = 0; y_pos != y_steps; ++y_pos) {
+            printf("reading chunk %d/%d, %d/%d\n", x_pos, x_steps, y_pos, y_steps);
+            printf("reading from %d, %d\n", x_pos * CHUNK_DIM, y_pos * CHUNK_DIM);
+
             hsize_t offset[2] = {x_pos * CHUNK_DIM, y_pos * CHUNK_DIM};
             // select where to write to
             H5Sselect_hyperslab(space,
@@ -156,6 +161,7 @@ int main(int argc, char** argv)
                     NULL,
                     ioDims,
                     NULL );
+
             status = H5Dread(dset, H5T_NATIVE_INT, ioSpace, space, H5P_DEFAULT, buffer);
         }
     }
