@@ -7,6 +7,7 @@ DEP_DIR=$(realpath ../../dependencies)
 
 pushd out
 
-CC=${DEP_DIR}/lifeboat-ins/bin/h5cc cmake ..
+CC=${DEP_DIR}/lifeboat-ins/bin/h5cc cmake .. \
+    -DCMAKE_BUILD_TYPE=Debug
 
 popd

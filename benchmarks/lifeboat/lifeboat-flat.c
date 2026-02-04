@@ -98,11 +98,14 @@ int main(int argc, char** argv)
     }
 
     hsize_t dims[2] = {DIM0, DIM1};
+    hsize_t ioDims[2] = {CHUNK_DIM, CHUNK_DIM};
+    hid_t dcpl_id = H5Pcreate(H5P_DATASET_CREATE);
+    H5Pset_chunk(dcpl_id, 2, ioDims);
 
     // create
     file = H5Fcreate(FILE, H5F_ACC_TRUNC, H5P_DEFAULT, fapl_id);
     space = H5Screate_simple(2, dims, NULL);
-    dset = H5Dcreate(file, DATASET, H5T_STD_I32LE, space, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    dset = H5Dcreate(file, DATASET, H5T_STD_I32LE, space, H5P_DEFAULT, dcpl_id, H5P_DEFAULT);
     // write and close
 
     int x_steps = DIM0 / CHUNK_DIM;
@@ -113,7 +116,6 @@ int main(int argc, char** argv)
 
     start = clock();
 
-    hsize_t ioDims[2] = {CHUNK_DIM, CHUNK_DIM};
     hid_t ioSpace = H5Screate_simple(2, ioDims, NULL);
 
     for(int x_pos = 0; x_pos != x_steps; ++x_pos) {
@@ -132,11 +134,10 @@ int main(int argc, char** argv)
         }
     }
 
-    status = H5Fclose(file);
-    end = clock();
-
     status = H5Dclose(dset);
     status = H5Sclose(space);
+    status = H5Fclose(file);
+    end = clock();
 
     elapsed = (double)(end - start) / CLOCKS_PER_SEC;
     printf("Write: %f\n", elapsed);
@@ -174,6 +175,7 @@ int main(int argc, char** argv)
     status = H5Dclose(dset);
     status = H5Fclose(file);
     status = H5Pclose (fapl_id);
+    H5Eprint2(status, stdout);
 
     return 0;
 }
