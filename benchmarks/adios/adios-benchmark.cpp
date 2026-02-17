@@ -32,7 +32,6 @@ constexpr std::size_t CHUNK_SIZE{ CHUNK_DIM * CHUNK_DIM };
 
 void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int width, int height, int thread_w, int thread_h)
 {
-
     int threadOffsetX = thread_w * rank;
     int threadOffsetY = thread_h * rank;
 
@@ -120,7 +119,7 @@ int main(int argc, char *argv[])
     MPI_Init(&argc, &argv);
 
     // parse arg type
-    if (argc != 4) {
+    if (argc != 5) {
         printf("ERROR: incorrect arg count\n");
         return -1;
     }
@@ -137,8 +136,19 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    std::uint64_t w = atoi(argv[2]);
-    std::uint64_t h = atoi(argv[3]);
+    bool modeWrite = false;
+    if(strcmp(argv[2], "write") == 0) {
+        modeWrite = true;
+    } else if (strcmp(argv[2], "read") == 0) {
+        modeWrite = false;
+    }
+    else {
+        printf("ERROR: invalid argument\n");
+        return -1;
+    }
+
+    std::uint64_t w = atoi(argv[3]);
+    std::uint64_t h = atoi(argv[4]);
 
     int rank, size;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -174,17 +184,19 @@ int main(int argc, char *argv[])
         MPI_Barrier(MPI_COMM_WORLD);
 
         // do and time write
-        auto start = high_resolution_clock::now();
-        doWrite(adios, doCrypt, rank, w, h, my_w, my_h);
-        MPI_Barrier(MPI_COMM_WORLD);
-        duration<double> elapsed = high_resolution_clock::now() - start;
-        if(rank == 0) std::cout << "Write: " << elapsed.count() << '\n';
-
-        start = high_resolution_clock::now();
-        doRead(adios, doCrypt, rank, my_w, my_h);
-        MPI_Barrier(MPI_COMM_WORLD);
-        elapsed = high_resolution_clock::now() - start;
-        if(rank == 0) std::cout << "Read: " << elapsed.count() << '\n';
+        if( modeWrite ) {
+            auto start = high_resolution_clock::now();
+            doWrite(adios, doCrypt, rank, w, h, my_w, my_h);
+            MPI_Barrier(MPI_COMM_WORLD);
+            duration<double> elapsed = high_resolution_clock::now() - start;
+            if(rank == 0) std::cout << "Write: " << elapsed.count() << '\n';
+        } else {
+            auto start = high_resolution_clock::now();
+            doRead(adios, doCrypt, rank, my_w, my_h);
+            MPI_Barrier(MPI_COMM_WORLD);
+            duration<double> elapsed = high_resolution_clock::now() - start;
+            if(rank == 0) std::cout << "Read: " << elapsed.count() << '\n';
+        }
     }
     catch (std::exception &e)
     {
