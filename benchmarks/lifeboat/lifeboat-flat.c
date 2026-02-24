@@ -55,7 +55,7 @@ static hid_t prepare_crypt() {
 }
 
 // 512 x 512 ints is 1MiB
-#define CHUNK_DIM   (256)
+#define CHUNK_DIM   (512)
 #define CHUNK_SIZE  (CHUNK_DIM * CHUNK_DIM)
 
 int main(int argc, char** argv)
@@ -68,7 +68,7 @@ int main(int argc, char** argv)
     hsize_t i, j;
 
     // parse arg type
-    if (argc != 4) {
+    if (argc != 5) {
         printf("ERROR: incorrect arg count\n");
         return -1;
     }
@@ -80,12 +80,23 @@ int main(int argc, char** argv)
         fapl_id = prepare_crypt();
     }
     else {
-        printf("ERROR: invalid argument\n");
+        printf("ERROR: invalid argument, use def or crypt\n");
         return -1;
     }
 
-    int DIM0 = atoi(argv[2]);
-    int DIM1 = atoi(argv[3]);
+    int doWrite = 0;
+    if(strcmp(argv[2], "read") == 0) {
+        doWrite = 0;
+    }
+    else if(strcmp(argv[2], "write") == 0) {
+        doWrite = 1;
+    } else {
+        printf("ERROR: invalid argument, use read or write\n");
+        return -1;
+    }
+
+    int DIM0 = atoi(argv[3]);
+    int DIM1 = atoi(argv[4]);
 
     if(DIM0 % CHUNK_DIM != 0 || DIM1 % CHUNK_DIM != 0) {
         printf("Error, dims are not separatable into chunks (dims size %d and %d, chunk size %dx%d)\n", DIM0, DIM1, CHUNK_DIM, CHUNK_DIM);
@@ -105,7 +116,8 @@ int main(int argc, char** argv)
     // create
     file = H5Fcreate(FILE, H5F_ACC_TRUNC, H5P_DEFAULT, fapl_id);
     space = H5Screate_simple(2, dims, NULL);
-    dset = H5Dcreate(file, DATASET, H5T_STD_I32LE, space, H5P_DEFAULT, dcpl_id, H5P_DEFAULT);
+    dset = H5Dcreate(file, DATASET, H5T_NATIVE_INT, space, H5P_DEFAULT, dcpl_id, H5P_DEFAULT);
+    space = H5Dget_space(dset);
     // write and close
 
     int x_steps = DIM0 / CHUNK_DIM;
@@ -118,64 +130,85 @@ int main(int argc, char** argv)
 
     hid_t ioSpace = H5Screate_simple(2, ioDims, NULL);
 
-    for(int x_pos = 0; x_pos != x_steps; ++x_pos) {
-        for(int y_pos = 0; y_pos != y_steps; ++y_pos) {
-            printf("writing chunk %d/%d, %d/%d\n", x_pos, x_steps, y_pos, y_steps);
+    if(doWrite) {
+        for(int x_pos = 0; x_pos != x_steps; ++x_pos) {
+            for(int y_pos = 0; y_pos != y_steps; ++y_pos) {
+                int x_off = x_pos * CHUNK_DIM, y_off = y_pos * CHUNK_DIM;
+                printf("writing chunk %d/%d, %d/%d\n", x_pos, x_steps, y_pos, y_steps);
+                printf("at position %d,%d\n", x_off, y_off);
 
-            hsize_t offset[2] = {x_pos * CHUNK_DIM, y_pos * CHUNK_DIM};
-            // select where to write to
-            H5Sselect_hyperslab(space,
-                    H5S_SELECT_SET,
-                    offset,
-                    NULL,
-                    ioDims,
-                    NULL );
-            status = H5Dwrite(dset, H5T_NATIVE_INT, ioSpace, space, H5P_DEFAULT, buffer);
+                hsize_t offset[2] = {x_off, y_off};
+                // select where to write to
+                H5Sselect_hyperslab(space,
+                        H5S_SELECT_SET,
+                        offset,
+                        NULL,
+                        ioDims,
+                        NULL );
+                status = H5Dwrite(dset, H5T_NATIVE_INT, ioSpace, space, H5P_DEFAULT, buffer);
+                if(status < 0) printf("ERROR\n");
+            }
         }
+
+        status = H5Dclose(dset);
+        status = H5Sclose(space);
+        status = H5Fclose(file);
+        end = clock();
+
+        elapsed = (double)(end - start) / CLOCKS_PER_SEC;
+        printf("Write: %f\n", elapsed);
     }
 
-    status = H5Dclose(dset);
-    status = H5Sclose(space);
-    status = H5Fclose(file);
-    end = clock();
+    for(int i = 0; i != CHUNK_SIZE; ++i) buffer[i] = 0;
 
-    elapsed = (double)(end - start) / CLOCKS_PER_SEC;
-    printf("Write: %f\n", elapsed);
+    if(!doWrite) {
+        clock_t check_start, check_end;
 
-    // open and read
-    file = H5Fopen(FILE, H5F_ACC_RDONLY, fapl_id);
-    dset = H5Dopen(file, DATASET, H5P_DEFAULT);
-    space = H5Dget_space(dset);
+        // open and read
+        file = H5Fopen(FILE, H5F_ACC_RDONLY, fapl_id);
+        dset = H5Dopen(file, DATASET, H5P_DEFAULT);
+        space = H5Dget_space(dset);
 
-    start = clock();
+        start = clock();
 
-    for(int x_pos = 0; x_pos != x_steps; ++x_pos) {
-        for(int y_pos = 0; y_pos != y_steps; ++y_pos) {
-            printf("reading chunk %d/%d, %d/%d\n", x_pos, x_steps, y_pos, y_steps);
-            printf("reading from %d, %d\n", x_pos * CHUNK_DIM, y_pos * CHUNK_DIM);
+        for(int x_pos = 0; x_pos != x_steps; ++x_pos) {
+            for(int y_pos = 0; y_pos != y_steps; ++y_pos) {
+                // printf("reading chunk %d/%d, %d/%d\n", x_pos, x_steps, y_pos, y_steps);
+                // printf("reading from %d, %d\n", x_pos * CHUNK_DIM, y_pos * CHUNK_DIM);
 
-            hsize_t offset[2] = {x_pos * CHUNK_DIM, y_pos * CHUNK_DIM};
-            // select where to write to
-            H5Sselect_hyperslab(space,
-                    H5S_SELECT_SET,
-                    offset,
-                    NULL,
-                    ioDims,
-                    NULL );
+                hsize_t offset[2] = {x_pos * CHUNK_DIM, y_pos * CHUNK_DIM};
+                // select where to write to
+                H5Sselect_hyperslab(space,
+                        H5S_SELECT_SET,
+                        offset,
+                        NULL,
+                        ioDims,
+                        NULL );
 
-            status = H5Dread(dset, H5T_NATIVE_INT, ioSpace, space, H5P_DEFAULT, buffer);
+                
+                status = H5Dread(dset, H5T_NATIVE_INT, ioSpace, space, H5P_DEFAULT, buffer);
+
+                check_start = clock();
+                for(int i = 0; i != CHUNK_SIZE; ++i) {
+                    if(buffer[i] != i) {
+                        printf("Invalid value \"%d\" at chunk index %d\n", buffer[i], i);
+                        exit(-1);
+                    }
+                }
+                printf("Verified read.\n");
+                check_end = clock();
+            }
         }
+        end = clock();
+
+        elapsed = (double)((end - start) - (check_end - check_start)) / CLOCKS_PER_SEC;
+        printf("Read: %f\n", elapsed);
+
+        // cleanup
+        status = H5Dclose(dset);
+        status = H5Fclose(file);
+        status = H5Pclose (fapl_id);
     }
-    end = clock();
-
-    elapsed = (double)(end - start) / CLOCKS_PER_SEC;
-    printf("Read: %f\n", elapsed);
-
-    // cleanup
-    status = H5Dclose(dset);
-    status = H5Fclose(file);
-    status = H5Pclose (fapl_id);
-    H5Eprint2(status, stdout);
 
     return 0;
 }

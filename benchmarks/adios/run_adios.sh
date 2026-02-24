@@ -24,9 +24,10 @@ echo "Contents:"
 cat $config
 . $config
 
-export UCX_TLS=self
-# MPIRUN=srun
-MPIRUN="mpiexec -n 1"
+# export UCX_TLS=self
+# MPIRUN="mpiexec -n 1"
+#
+MPIRUN=srun
 
 if [[ ! $USE_STDOUT ]]; then
     ${MPIRUN} ./out/adios-benchmark ${MODE} write ${DIM0} ${DIM1} > ${OUTPUT_DIR}/adios/$(basename ${config})-write.txt
