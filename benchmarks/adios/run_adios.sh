@@ -30,9 +30,8 @@ cat $config
 MPIRUN=srun
 
 if [[ ! $USE_STDOUT ]]; then
-    ${MPIRUN} ./out/adios-benchmark ${MODE} write ${DIM0} ${DIM1} > ${OUTPUT_DIR}/adios/$(basename ${config})-write.txt
-    ${MPIRUN} ./out/adios-benchmark ${MODE} read ${DIM0} ${DIM1} > ${OUTPUT_DIR}/adios/$(basename ${config})-read.txt
+    ${MPIRUN} ./out/adios-benchmark ${MODE} ${RW} ${DIM0} ${DIM1} > ${OUTPUT_DIR}/adios/$(basename ${config})-${RW}.txt
 else
-    ${MPIRUN} ./out/adios-benchmark ${MODE} write ${DIM0} ${DIM1}
-    ${MPIRUN} ./out/adios-benchmark ${MODE} read ${DIM0} ${DIM1}
+    ${MPIRUN} ./out/adios-benchmark ${MODE} ${RW} ${DIM0} ${DIM1}
+    ${MPIRUN} ./out/adios-benchmark ${MODE} ${RW} ${DIM0} ${DIM1}
 fi

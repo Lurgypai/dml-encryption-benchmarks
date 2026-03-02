@@ -7,7 +7,6 @@
 #include <stdlib.h>
 #include <time.h>
 
-#define FILE    "h5ex_d_rdwr_crypt.h5"
 #define DATASET "DS1"
 
 static hid_t prepare_def() {
@@ -98,14 +97,12 @@ int main(int argc, char** argv)
     int DIM0 = atoi(argv[3]);
     int DIM1 = atoi(argv[4]);
 
+    char FILE[512] = {0};
+    sprintf(FILE, "%s-%08d-%08d.h5", argv[1], DIM0, DIM1);
+
     if(DIM0 % CHUNK_DIM != 0 || DIM1 % CHUNK_DIM != 0) {
         printf("Error, dims are not separatable into chunks (dims size %d and %d, chunk size %dx%d)\n", DIM0, DIM1, CHUNK_DIM, CHUNK_DIM);
         return -1;
-    }
-
-    int* buffer = malloc(CHUNK_SIZE * sizeof(int));
-    for(int i = 0; i != CHUNK_SIZE; ++i) {
-        buffer[i] = i;
     }
 
     hsize_t dims[2] = {DIM0, DIM1};
@@ -114,10 +111,6 @@ int main(int argc, char** argv)
     H5Pset_chunk(dcpl_id, 2, ioDims);
 
     // create
-    file = H5Fcreate(FILE, H5F_ACC_TRUNC, H5P_DEFAULT, fapl_id);
-    space = H5Screate_simple(2, dims, NULL);
-    dset = H5Dcreate(file, DATASET, H5T_NATIVE_INT, space, H5P_DEFAULT, dcpl_id, H5P_DEFAULT);
-    space = H5Dget_space(dset);
     // write and close
 
     int x_steps = DIM0 / CHUNK_DIM;
@@ -126,16 +119,24 @@ int main(int argc, char** argv)
     clock_t start, end;
     double elapsed;
 
-    start = clock();
-
     hid_t ioSpace = H5Screate_simple(2, ioDims, NULL);
 
     if(doWrite) {
+        file = H5Fcreate(FILE, H5F_ACC_TRUNC, H5P_DEFAULT, fapl_id);
+        space = H5Screate_simple(2, dims, NULL);
+        dset = H5Dcreate(file, DATASET, H5T_NATIVE_INT, space, H5P_DEFAULT, dcpl_id, H5P_DEFAULT);
+
+        int* buffer = malloc(CHUNK_SIZE * sizeof(int));
+        for(int i = 0; i != CHUNK_SIZE; ++i) {
+            buffer[i] = i;
+        }
+
+        start = clock();
         for(int x_pos = 0; x_pos != x_steps; ++x_pos) {
             for(int y_pos = 0; y_pos != y_steps; ++y_pos) {
                 int x_off = x_pos * CHUNK_DIM, y_off = y_pos * CHUNK_DIM;
-                printf("writing chunk %d/%d, %d/%d\n", x_pos, x_steps, y_pos, y_steps);
-                printf("at position %d,%d\n", x_off, y_off);
+                // printf("writing chunk %d/%d, %d/%d\n", x_pos, x_steps, y_pos, y_steps);
+                // printf("at position %d,%d\n", x_off, y_off);
 
                 hsize_t offset[2] = {x_off, y_off};
                 // select where to write to
@@ -146,23 +147,23 @@ int main(int argc, char** argv)
                         ioDims,
                         NULL );
                 status = H5Dwrite(dset, H5T_NATIVE_INT, ioSpace, space, H5P_DEFAULT, buffer);
-                if(status < 0) printf("ERROR\n");
             }
         }
+        end = clock();
 
         status = H5Dclose(dset);
         status = H5Sclose(space);
         status = H5Fclose(file);
-        end = clock();
 
         elapsed = (double)(end - start) / CLOCKS_PER_SEC;
         printf("Write: %f\n", elapsed);
     }
 
-    for(int i = 0; i != CHUNK_SIZE; ++i) buffer[i] = 0;
+    
 
     if(!doWrite) {
-        clock_t check_start, check_end;
+        int* buffer = malloc(CHUNK_SIZE * sizeof(int));
+        for(int i = 0; i != CHUNK_SIZE; ++i) buffer[i] = 0;
 
         // open and read
         file = H5Fopen(FILE, H5F_ACC_RDONLY, fapl_id);
@@ -187,21 +188,11 @@ int main(int argc, char** argv)
 
                 
                 status = H5Dread(dset, H5T_NATIVE_INT, ioSpace, space, H5P_DEFAULT, buffer);
-
-                check_start = clock();
-                for(int i = 0; i != CHUNK_SIZE; ++i) {
-                    if(buffer[i] != i) {
-                        printf("Invalid value \"%d\" at chunk index %d\n", buffer[i], i);
-                        exit(-1);
-                    }
-                }
-                printf("Verified read.\n");
-                check_end = clock();
             }
         }
         end = clock();
 
-        elapsed = (double)((end - start) - (check_end - check_start)) / CLOCKS_PER_SEC;
+        elapsed = (double)(end - start) / CLOCKS_PER_SEC;
         printf("Read: %f\n", elapsed);
 
         // cleanup

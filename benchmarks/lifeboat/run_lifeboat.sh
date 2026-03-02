@@ -12,8 +12,6 @@ if [[ -d ${OUTPUT_DIR} ]]; then
     mkdir ${OUTPUT_DIR}/lifeboat
 fi
 
-rm h5ex_d_rdwr_crypt.h5
-
 if [[ ! -e ${config} ]]; then
     echo "Config file \"${config}\" doesn't exist."
     exit 1
@@ -26,10 +24,9 @@ cat $config
 
 export LD_LIBRARY_PATH="${LD_LIBRARY_PATH};${DEP_DIR}/gcrypt-ins/lib/;${DEP_DIR}/lifeboat-ins/lib/"
 if [[ -d ${OUTPUT_DIR} ]]; then
-    ./out/lifeboat-flat ${MODE} write ${DIM0} ${DIM1} > ${OUTPUT_DIR}/lifeboat/$(basename ${config})-write.txt
-    ./out/lifeboat-flat ${MODE} read ${DIM0} ${DIM1} > ${OUTPUT_DIR}/lifeboat/$(basename ${config})-read.txt
+    ./out/lifeboat-flat ${MODE} ${RW} ${DIM0} ${DIM1} > ${OUTPUT_DIR}/lifeboat/$(basename ${config})-${RW}.txt
 else
-    ./out/lifeboat-flat ${MODE} write ${DIM0} ${DIM1}
-    ./out/lifeboat-flat ${MODE} read ${DIM0} ${DIM1}
+    ./out/lifeboat-flat ${MODE} ${RW} ${DIM0} ${DIM1}
+    ./out/lifeboat-flat ${MODE} ${RW} ${DIM0} ${DIM1}
 fi
 
