@@ -1,9 +1,6 @@
 #!/bin/bash
 
 export OUTPUT_DIR=$(realpath output)
-rm -r ${OUTPUT_DIR}
-mkdir ${OUTPUT_DIR}
-# lfs setstripe -c 8 -S $((16384*16384)) ${OUTPUT_DIR}
 
 if [[ ! -d ${1} ]]; then
     echo "\"${1}\" is not a directory."

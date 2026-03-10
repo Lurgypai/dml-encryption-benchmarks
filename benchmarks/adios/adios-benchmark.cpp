@@ -30,6 +30,8 @@ std::string key;
 constexpr std::size_t CHUNK_DIM{512};
 constexpr std::size_t CHUNK_SIZE{ CHUNK_DIM * CHUNK_DIM };
 
+std::string FILENAME;
+
 void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int width, int height, int thread_w, int thread_h)
 {
     int threadOffsetX = thread_w * rank;
@@ -53,7 +55,7 @@ void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int width, int height
         var.AddOperation("plugin", params);
     }
 
-    adios2::Engine writer = io.Open("benchmark_out.bp", adios2::Mode::Write);
+    adios2::Engine writer = io.Open(FILENAME, adios2::Mode::Write);
 
     std::vector<std::int32_t> data;
     data.resize(CHUNK_SIZE);
@@ -81,7 +83,7 @@ void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int width, int height
 void doRead(adios2::ADIOS &adios, bool doCrypt, int rank, int thread_w, int thread_h)
 {
     adios2::IO io = adios.DeclareIO("hello-world-reader");
-    adios2::Engine reader = io.Open("benchmark_out.bp", adios2::Mode::Read);
+    adios2::Engine reader = io.Open(FILENAME, adios2::Mode::Read);
     reader.BeginStep();
     adios2::Variable<std::int32_t> var =
         io.InquireVariable<std::int32_t>("Var");
@@ -149,6 +151,8 @@ int main(int argc, char *argv[])
 
     std::uint64_t w = atoi(argv[3]);
     std::uint64_t h = atoi(argv[4]);
+
+    FILENAME = "benchmark-" + std::to_string(w) + "-" + std::to_string(h) + "-" + argv[1] + ".bp";
 
     int rank, size;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);

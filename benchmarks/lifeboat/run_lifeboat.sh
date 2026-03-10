@@ -24,7 +24,7 @@ cat $config
 
 export LD_LIBRARY_PATH="${LD_LIBRARY_PATH};${DEP_DIR}/gcrypt-ins/lib/;${DEP_DIR}/lifeboat-ins/lib/"
 if [[ -d ${OUTPUT_DIR} ]]; then
-    ./out/lifeboat-flat ${MODE} ${RW} ${DIM0} ${DIM1} > ${OUTPUT_DIR}/lifeboat/$(basename ${config})-${RW}.txt
+    ./out/lifeboat-flat ${MODE} ${RW} ${DIM0} ${DIM1} > ${OUTPUT_DIR}/lifeboat/$(basename ${config}).txt
 else
     ./out/lifeboat-flat ${MODE} ${RW} ${DIM0} ${DIM1}
     ./out/lifeboat-flat ${MODE} ${RW} ${DIM0} ${DIM1}

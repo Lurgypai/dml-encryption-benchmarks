@@ -9,7 +9,6 @@ if [[ -z ${OUTPUT_DIR} ]]; then
     USE_STDOUT="yes"
 fi
 
-rm -r benchmark_out.bp
 if [[ ! $USE_STDOUT ]]; then
     mkdir ${OUTPUT_DIR}/adios
 fi
@@ -30,8 +29,7 @@ cat $config
 MPIRUN=srun
 
 if [[ ! $USE_STDOUT ]]; then
-    ${MPIRUN} ./out/adios-benchmark ${MODE} ${RW} ${DIM0} ${DIM1} > ${OUTPUT_DIR}/adios/$(basename ${config})-${RW}.txt
+    ${MPIRUN} ./out/adios-benchmark ${MODE} ${RW} ${DIM0} ${DIM1} > ${OUTPUT_DIR}/adios/$(basename ${config}).txt
 else
-    ${MPIRUN} ./out/adios-benchmark ${MODE} ${RW} ${DIM0} ${DIM1}
     ${MPIRUN} ./out/adios-benchmark ${MODE} ${RW} ${DIM0} ${DIM1}
 fi
