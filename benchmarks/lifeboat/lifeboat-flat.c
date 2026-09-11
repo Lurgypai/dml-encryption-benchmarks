@@ -132,8 +132,8 @@ int main(int argc, char** argv)
         }
 
         start = clock();
-        for(int x_pos = 0; x_pos != x_steps; ++x_pos) {
-            for(int y_pos = 0; y_pos != y_steps; ++y_pos) {
+        for(int y_pos = 0; y_pos != y_steps; ++y_pos) {
+            for(int x_pos = 0; x_pos != x_steps; ++x_pos) {
                 int x_off = x_pos * CHUNK_DIM, y_off = y_pos * CHUNK_DIM;
                 // printf("writing chunk %d/%d, %d/%d\n", x_pos, x_steps, y_pos, y_steps);
                 // printf("at position %d,%d\n", x_off, y_off);

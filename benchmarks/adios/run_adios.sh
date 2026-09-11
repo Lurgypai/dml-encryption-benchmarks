@@ -10,7 +10,9 @@ if [[ -z ${OUTPUT_DIR} ]]; then
 fi
 
 if [[ ! $USE_STDOUT ]]; then
-    mkdir ${OUTPUT_DIR}/adios
+    if [[ ! -e ${OUTPUT_DIR}/adios ]]; then
+        mkdir ${OUTPUT_DIR}/adios
+    fi
 fi
 
 if [[ ! -e ${config} ]]; then
@@ -18,18 +20,20 @@ if [[ ! -e ${config} ]]; then
     exit 1
 fi
 
-echo "Using config file ${config}..."
-echo "Contents:"
-cat $config
+RANK=$PMI_RANK
+if [[ -z $PMI_RANK ]]; then
+    RANK=$SLURM_PROCID
+fi
+
+if [[ $RANK == 0 ]]; then
+    echo "Using config file ${config}..."
+    echo "Contents:"
+    cat $config
+fi
 . $config
 
-# export UCX_TLS=self
-# MPIRUN="mpiexec -n 1"
-#
-MPIRUN=srun
-
 if [[ ! $USE_STDOUT ]]; then
-    ${MPIRUN} ./out/adios-benchmark ${MODE} ${RW} ${DIM0} ${DIM1} > ${OUTPUT_DIR}/adios/$(basename ${config}).txt
+    ./out/adios-benchmark ${MODE} ${RW} ${DIM0} ${DIM1} > ${OUTPUT_DIR}/adios/$(basename ${config}).txt
 else
-    ${MPIRUN} ./out/adios-benchmark ${MODE} ${RW} ${DIM0} ${DIM1}
+    ./out/adios-benchmark ${MODE} ${RW} ${DIM0} ${DIM1}
 fi
