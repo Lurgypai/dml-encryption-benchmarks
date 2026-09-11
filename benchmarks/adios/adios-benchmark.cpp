@@ -13,8 +13,6 @@
 #include <iostream>
 #include <chrono>
 
-#include <stdexcept>
-
 #include <cstdint>
 #include <cstring>
 
@@ -23,32 +21,38 @@
 
 using namespace std::chrono;
 
-std::string key;
-
 // 16 ints X 16 ints is 4KiB
 // 512 X 512 ins is 1MiB
 constexpr std::size_t CHUNK_DIM{512};
+constexpr std::size_t CHUNK_DIM_BYTES{CHUNK_DIM * sizeof(int32_t)};
 constexpr std::size_t CHUNK_SIZE{ CHUNK_DIM * CHUNK_DIM };
 
 std::string FILENAME;
 
-void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int width, int height, int thread_w, int thread_h)
+void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int w_chunks, int h_chunks, int my_w_chunks, int my_h_chunks)
 {
-    int threadOffsetX = thread_w * rank;
-    int threadOffsetY = thread_h * rank;
+
+    size_t w_units = w_chunks * CHUNK_DIM;
+    size_t h_units = h_chunks * CHUNK_DIM;
+
+    size_t my_w_units = my_w_chunks * CHUNK_DIM;
+    size_t my_h_units = my_h_chunks * CHUNK_DIM;
+
+    size_t threadOffsetX = 0;
+    size_t threadOffsetY = my_h_units * rank;
 
     adios2::IO io = adios.DeclareIO("hello-world-writer");
     adios2::Variable<std::int32_t> var = io.DefineVariable<std::int32_t>(
         "Var",
-        {width, height},                    // base dimensions
+        {w_units, h_units},                    // base dimensions
         {threadOffsetX, threadOffsetY},     // thread offset
-        {thread_w, thread_h}                // thread region
+        {my_w_units, my_h_units}                // thread region
     );
 
     if(doCrypt) {
         io.SetEngine("BPFile");
         adios2::Params params;
-        params["PluginName"] = "MyOperator";
+        params["PluginName"] = "cryptop";
         params["PluginLibrary"] = "EncryptionOperator";
         params["SecretKeyFile"] = "secret-key";
 
@@ -65,31 +69,29 @@ void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int width, int height
 
     writer.BeginStep();
 
-    int xSteps = thread_w / CHUNK_DIM;
-    int ySteps = thread_h / CHUNK_DIM;
-    for(int xStep = 0; xStep != xSteps; ++xStep) {
-        for(int yStep = 0; yStep != ySteps; ++yStep) {
+    int ySteps = my_h_chunks;
+    int xSteps = my_w_chunks;
+    for(int yStep = 0; yStep != ySteps; ++yStep) {
+        for(int xStep = 0; xStep != xSteps; ++xStep) {
             adios2::Box<adios2::Dims> sel({xStep * CHUNK_DIM + threadOffsetX, yStep * CHUNK_DIM + threadOffsetY}, {CHUNK_DIM, CHUNK_DIM});
             var.SetSelection(sel);
             writer.Put(var, data.data());
         }
     }
 
-
     writer.EndStep();
     writer.Close();
 }
 
-void doRead(adios2::ADIOS &adios, bool doCrypt, int rank, int thread_w, int thread_h)
+void doRead(adios2::ADIOS &adios, bool doCrypt, int rank, int my_w_chunks, int my_h_chunks)
 {
     adios2::IO io = adios.DeclareIO("hello-world-reader");
-    adios2::Engine reader = io.Open(FILENAME, adios2::Mode::Read);
-    reader.BeginStep();
-    adios2::Variable<std::int32_t> var =
-        io.InquireVariable<std::int32_t>("Var");
-
     if(doCrypt) {
         io.SetEngine("BPFile");
+    }
+    adios2::Engine reader = io.Open(FILENAME, adios2::Mode::Read);
+    reader.BeginStep(); adios2::Variable<std::int32_t> var = io.InquireVariable<std::int32_t>("Var");
+    if(doCrypt) {
         adios2::Params params;
         params["PluginName"] = "cryptop";
         params["PluginLibrary"] = "EncryptionOperator";
@@ -97,14 +99,15 @@ void doRead(adios2::ADIOS &adios, bool doCrypt, int rank, int thread_w, int thre
         var.AddOperation("plugin", params);
     }
 
+
     std::vector<std::int32_t> data;
 
-    int xSteps = thread_w / CHUNK_DIM;
-    int ySteps = thread_h / CHUNK_DIM;
-    int threadOffsetX = thread_w * rank;
-    int threadOffsetY = thread_h * rank;
-    for(int xStep = 0; xStep != xSteps; ++xStep) {
-        for(int yStep = 0; yStep != ySteps; ++yStep) {
+    int ySteps = my_h_chunks;
+    int xSteps = my_w_chunks;
+    int threadOffsetX = 0;
+    int threadOffsetY = my_h_chunks * CHUNK_DIM * rank;
+    for(int yStep = 0; yStep != ySteps; ++yStep) {
+        for(int xStep = 0; xStep != xSteps; ++xStep) {
             adios2::Box<adios2::Dims> sel({xStep * CHUNK_DIM + threadOffsetX, yStep * CHUNK_DIM + threadOffsetY}, {CHUNK_DIM, CHUNK_DIM});
             var.SetSelection(sel);
             reader.Get(var, data);
@@ -149,35 +152,32 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    std::uint64_t w = atoi(argv[3]);
-    std::uint64_t h = atoi(argv[4]);
+    std::uint64_t w_kbytes = atoi(argv[3]);
+    std::uint64_t h_kbytes = atoi(argv[4]);
 
-    FILENAME = "benchmark-" + std::to_string(w) + "-" + std::to_string(h) + "-" + argv[1] + ".bp";
+    FILENAME = "benchmark-" + std::to_string(w_kbytes) + "-" + std::to_string(h_kbytes) + "-" + argv[1] + ".bp";
 
-    int rank, size;
+    int rank, rank_count;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    MPI_Comm_size(MPI_COMM_WORLD, &size); 
+    MPI_Comm_size(MPI_COMM_WORLD, &rank_count); 
 
-    // not evenly divisible
-    if(w % size != 0 || h % size != 0) {
-        if(rank == 0) std::cout << "Dimensions are not evenly divisible, aborting.\n";
+    std::uint64_t w_bytes = w_kbytes * 1024;
+    std::uint64_t h_bytes = h_kbytes * 1024;
+
+    std::uint64_t w_chunks = w_bytes / CHUNK_DIM_BYTES;
+    std::uint64_t h_chunks = h_bytes / CHUNK_DIM_BYTES;
+
+    if(h_chunks % rank_count != 0) {
+        if(rank == 0) std::cout << "The height value is too low (minimum for " << rank_count << " ranks is " << (CHUNK_DIM * rank_count) / 1024 << "KiB)\n";
         return 1;
     }
 
-    std::uint64_t my_w = w / size;
-    std::uint64_t my_h = h / size;
-
-    if(my_w % CHUNK_DIM != 0 || my_h % CHUNK_DIM != 0) {
-        if(rank == 0) std::cout << "Per thread dimensions are not evenly divisble, aborting.\n";
-        return 1;
-    }
+    std::uint64_t my_w_chunks = w_chunks;
+    std::uint64_t my_h_chunks = h_chunks / rank_count;
 
     if(rank == 0) {
-        std::cout << "Ranks: " << size << ", w: " << w << ", h: " << h << ", per rank w: " << my_w << ", per rank h: " << my_h << '\n';
-
-        // setup key
-        // I'm lazy so everything just uses a 0 initialized key
-        key.resize(16);
+        std::cout << "Ranks: " << rank_count << ", w_kbytes: " << w_kbytes << ", h_kbytes: " << h_kbytes << ", per rank w: "
+            << my_w_chunks * CHUNK_DIM_BYTES << ", per rank h: " << my_h_chunks * CHUNK_DIM_BYTES << '\n';
     }
 
 
@@ -190,13 +190,13 @@ int main(int argc, char *argv[])
         // do and time write
         if( modeWrite ) {
             auto start = high_resolution_clock::now();
-            doWrite(adios, doCrypt, rank, w, h, my_w, my_h);
+            doWrite(adios, doCrypt, rank, w_chunks, h_chunks, my_w_chunks, my_h_chunks);
             MPI_Barrier(MPI_COMM_WORLD);
             duration<double> elapsed = high_resolution_clock::now() - start;
             if(rank == 0) std::cout << "Write: " << elapsed.count() << '\n';
         } else {
             auto start = high_resolution_clock::now();
-            doRead(adios, doCrypt, rank, my_w, my_h);
+            doRead(adios, doCrypt, rank, my_w_chunks, my_h_chunks);
             MPI_Barrier(MPI_COMM_WORLD);
             duration<double> elapsed = high_resolution_clock::now() - start;
             if(rank == 0) std::cout << "Read: " << elapsed.count() << '\n';
