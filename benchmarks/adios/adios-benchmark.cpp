@@ -77,6 +77,7 @@ void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int w_chunks, int h_c
             var.SetSelection(sel);
             writer.Put(var, data.data());
         }
+        // writer.PerformDataWrite();
     }
 
     writer.EndStep();
@@ -123,6 +124,10 @@ int main(int argc, char *argv[])
 
     MPI_Init(&argc, &argv);
 
+    int rank, rank_count;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &rank_count); 
+
     // parse arg type
     if (argc != 5) {
         printf("ERROR: incorrect arg count\n");
@@ -157,10 +162,6 @@ int main(int argc, char *argv[])
 
     FILENAME = "benchmark-" + std::to_string(w_kbytes) + "-" + std::to_string(h_kbytes) + "-" + argv[1] + ".bp";
 
-    int rank, rank_count;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    MPI_Comm_size(MPI_COMM_WORLD, &rank_count); 
-
     std::uint64_t w_bytes = w_kbytes * 1024;
     std::uint64_t h_bytes = h_kbytes * 1024;
 
@@ -177,9 +178,11 @@ int main(int argc, char *argv[])
 
     if(rank == 0) {
         std::cout << "Ranks: " << rank_count << ", w_kbytes: " << w_kbytes << ", h_kbytes: " << h_kbytes << ", per rank w: "
-            << my_w_chunks * CHUNK_DIM_BYTES << ", per rank h: " << my_h_chunks * CHUNK_DIM_BYTES << '\n';
+            << my_w_chunks * CHUNK_DIM_BYTES << ", per rank h: " << my_h_chunks * CHUNK_DIM_BYTES << std::endl;
     }
 
+
+    MPI_Barrier(MPI_COMM_WORLD);
 
     try
     {

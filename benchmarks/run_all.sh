@@ -5,8 +5,6 @@ if [[ -z $PMI_RANK ]]; then
     RANK=$SLURM_PROCID
 fi
 
-export OUTPUT_DIR=$(realpath output)
-
 if [[ ! -d ${1} ]]; then
     if [[ $RANK == 0 ]]; then
         echo "\"${1}\" is not a directory."

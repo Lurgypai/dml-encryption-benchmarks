@@ -6,8 +6,11 @@ modes = ["crypt", "def"]
 # dims0 = [16384 * 4, 16384 * 8, 16384 * 16, 16384 * 32 ]
 # dims1 = [16384 * 4]
 
-dims0 = [16384 * 4]
-dims1 = [16384 * 4]
+# numbers are in KiB, so region is 32 KiB * 8192 KiB (don't know that that makes sense
+
+dims0 = [128, 256, 512, 1024]
+# minimum number of bytes for each rank to have a row with 4096 ranks
+dims1 = [8192]
 
 output_dir = "configs"
 

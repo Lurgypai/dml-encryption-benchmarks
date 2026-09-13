@@ -29,6 +29,7 @@ if [[ $RANK == 0 ]]; then
     echo "Using config file ${config}..."
     echo "Contents:"
     cat $config
+    echo ""
 fi
 . $config
 
