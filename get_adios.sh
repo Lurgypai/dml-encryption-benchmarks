@@ -8,8 +8,8 @@ fi
 DEP_DIR=$(realpath dependencies)
 
 pushd dependencies
-    # retrieve adios2
-    git clone https://github.com/ornladios/ADIOS2.git
+    rm -rf ADIOS2
+    git clone git@github.com:Lurgypai/ADIOS2.git
     pushd ADIOS2
         mkdir out
         pushd out

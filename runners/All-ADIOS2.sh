@@ -4,12 +4,13 @@
 #SBATCH --ntasks-per-node=64
 #SBATCH --cpus-per-task=1
 #SBATCH --account=m2621
-#SBATCH --time=00:30:00
+#SBATCH --time=02:00:00
 #SBATCH --constraint=cpu
-#SBATCH --qos=debug
+#SBATCH --qos=regular
 
-# cd into benchmark dir
-# run benchmark
+
+# just for filenames 
+mode="all"
 
 GCRYPT_INS_DIR=$(realpath ../dependencies/gcrypt-ins/lib)
 
@@ -17,16 +18,23 @@ export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:$GCRYPT_INS_DIR"
 
 DATE_TIME="$(date "+%Y-%m-%d_%H:%M:%S")"
 
-for NODE_COUNT in "8 16 32 64"; do
-    for PROCESS_COUNT in "64"; do
+node_counts="8 16 32 64"
+process_counts="64"
 
-        TAG="all-ADIOS2-${DATE_TIME}-${NODE_COUNT}n-${PROCESS_COUNT}p"
+for NODE_COUNT in ${node_counts}; do
+    for PROCESS_COUNT in ${process_counts}; do
+
+        TAG="${mode}-ADIOS2-${DATE_TIME}-${NODE_COUNT}n-${PROCESS_COUNT}p"
 
         echo ${TAG};
 
-        pushd ../benchmarks >> /dev/null
+        pushd ../benchmarks > /dev/null
+            rm -r output
             mkdir output
-            export OUTPUT_DIR="output"
+            # relative to the dir where the final run script is
+            export OUTPUT_DIR="../output"
+
+            ls
 
             srun --nodes=$NODE_COUNT --ntasks-per-node=$PROCESS_COUNT ./run_all.sh configs/write adios
             srun --nodes=$NODE_COUNT --ntasks-per-node=$PROCESS_COUNT ./run_all.sh configs/read adios
@@ -42,4 +50,4 @@ for NODE_COUNT in "8 16 32 64"; do
 done
 
 
-mv *.out "All-adios2-${DATE_TIME}.txt"
+mv *.out "${mode}-adios2-${DATE_TIME}.txt"

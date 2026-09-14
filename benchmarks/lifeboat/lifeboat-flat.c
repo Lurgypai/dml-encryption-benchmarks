@@ -94,11 +94,14 @@ int main(int argc, char** argv)
         return -1;
     }
 
-    int DIM0 = atoi(argv[3]);
-    int DIM1 = atoi(argv[4]);
+    int dim0_kbytes = atoi(argv[3]);
+    int dim1_kbytes = atoi(argv[4]);
 
     char FILE[512] = {0};
-    sprintf(FILE, "%s-%08d-%08d.h5", argv[1], DIM0, DIM1);
+    sprintf(FILE, "%s-%08d-%08d.h5", argv[1], dim0_kbytes, dim1_kbytes);
+
+    int DIM0 = dim0_kbytes * 1024;
+    int DIM1 = dim1_kbytes * 1024;
 
     if(DIM0 % CHUNK_DIM != 0 || DIM1 % CHUNK_DIM != 0) {
         printf("Error, dims are not separatable into chunks (dims size %d and %d, chunk size %dx%d)\n", DIM0, DIM1, CHUNK_DIM, CHUNK_DIM);
