@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#SBATCH --nodes=4
-#SBATCH --ntasks-per-node=64
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=16
 #SBATCH --cpus-per-task=1
 #SBATCH --account=m2621
 #SBATCH --time=00:30:00
@@ -17,8 +17,8 @@ export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:$GCRYPT_INS_DIR"
 
 DATE_TIME="$(date "+%Y-%m-%d_%H:%M:%S")"
 
-node_counts="2 4"
-process_counts="64"
+node_counts="1"
+process_counts="16"
 
 for NODE_COUNT in ${node_counts}; do
     for PROCESS_COUNT in ${process_counts}; do

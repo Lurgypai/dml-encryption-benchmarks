@@ -30,12 +30,10 @@ pushd ../benchmarks >> /dev/null
     # srun --nodes=$NODE_COUNT --ntasks-per-node=$PROCESS_COUNT ./run_all.sh configs/write lifeboat
     # srun --nodes=$NODE_COUNT --ntasks-per-node=$PROCESS_COUNT ./run_all.sh configs/read lifeboat
     ./run_all.sh configs/write lifeboat
-    ./run_all.sh configs/read lifeboat
 
     pushd lifeboat
         du -sh *.h5
         head *.h5
-        ./clean_outputs.sh
     popd
 
     mv output ../runners/${TAG}-output

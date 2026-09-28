@@ -13,7 +13,7 @@ static hid_t prepare_def() {
     return H5P_DEFAULT;
 }
 
-static hid_t prepare_crypt() {
+static hid_t prepare_crypt(int alg, int mode, int key_size) {
     hid_t fapl_id = H5I_INVALID_HID;
 
     H5FD_pb_vfd_config_t     pb_vfd_config =
@@ -32,12 +32,12 @@ static hid_t prepare_crypt() {
         /* plaintext_page_size    = */ 4096,
         /* ciphertext_page_size   = */ 4112,
         /* encryption_buffer_size = */ H5FD_CRYPT_DEFAULT_ENCRYPTION_BUFFER_SIZE,
-        /* cipher                 = */ 0,   /* AES256 */
+        /* cipher                 = */ alg,   /* AES256 */
         /* cipher_block_size      = */ 16,
-        /* key_size               = */ 32,
+        /* key_size               = */ key_size,
         /* key                    = */ H5FD_CRYPT_TEST_KEY,
         /* iv_size                = */ 16,
-        /* mode                   = */ 0,
+        /* mode                   = */ mode,
         /* fapl_id                = */ H5P_DEFAULT
     };
     hid_t                    crypt_fapl_id    = H5I_INVALID_HID;
@@ -66,8 +66,13 @@ int main(int argc, char** argv)
     herr_t  status;
     hsize_t i, j;
 
+    int alg = atoi(argv[3]);
+    int mode = atoi(argv[4]);
+    // key_size is 16 for aes128, 32 for 256 and twofish
+    int key_size = alg == 2 ? 16 : 32;
+
     // parse arg type
-    if (argc != 5) {
+    if (argc != 7) {
         printf("ERROR: incorrect arg count\n");
         return -1;
     }
@@ -76,7 +81,7 @@ int main(int argc, char** argv)
         fapl_id = prepare_def();
     }
     else if (strcmp(argv[1], "crypt") == 0) {
-        fapl_id = prepare_crypt();
+        fapl_id = prepare_crypt(alg, mode, key_size);
     }
     else {
         printf("ERROR: invalid argument, use def or crypt\n");
@@ -94,14 +99,18 @@ int main(int argc, char** argv)
         return -1;
     }
 
-    int dim0_kbytes = atoi(argv[3]);
-    int dim1_kbytes = atoi(argv[4]);
+
+    int dim0_kbytes = atoi(argv[5]);
+    int dim1_kbytes = atoi(argv[6]);
 
     char FILE[512] = {0};
-    sprintf(FILE, "%s-%08d-%08d.h5", argv[1], dim0_kbytes, dim1_kbytes);
+    sprintf(FILE, "%s-%01d-%01d-%08d-%08d.h5", argv[1], alg, mode, dim0_kbytes, dim1_kbytes);
 
-    int DIM0 = dim0_kbytes * 1024;
-    int DIM1 = dim1_kbytes * 1024;
+    int dim0_bytes = dim0_kbytes * 1024;
+    int dim1_bytes = dim1_kbytes * 1024;
+
+    int DIM0 = dim0_bytes / 4;
+    int DIM1 = dim1_bytes / 4;
 
     if(DIM0 % CHUNK_DIM != 0 || DIM1 % CHUNK_DIM != 0) {
         printf("Error, dims are not separatable into chunks (dims size %d and %d, chunk size %dx%d)\n", DIM0, DIM1, CHUNK_DIM, CHUNK_DIM);
@@ -175,8 +184,8 @@ int main(int argc, char** argv)
 
         start = clock();
 
-        for(int x_pos = 0; x_pos != x_steps; ++x_pos) {
-            for(int y_pos = 0; y_pos != y_steps; ++y_pos) {
+        for(int y_pos = 0; y_pos != y_steps; ++y_pos) {
+            for(int x_pos = 0; x_pos != x_steps; ++x_pos) {
                 // printf("reading chunk %d/%d, %d/%d\n", x_pos, x_steps, y_pos, y_steps);
                 // printf("reading from %d, %d\n", x_pos * CHUNK_DIM, y_pos * CHUNK_DIM);
 

@@ -55,6 +55,7 @@ void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int w_chunks, int h_c
         params["PluginName"] = "cryptop";
         params["PluginLibrary"] = "EncryptionOperator";
         params["SecretKeyFile"] = "secret-key";
+        params["debug_rank"] = std::to_string(rank);
 
         var.AddOperation("plugin", params);
     }
