@@ -13,6 +13,7 @@ rm -r out
 mkdir out
 cd out
 CC=mpicc CXX=mpicxx cmake .. \
+    -DCMAKE_BUILD_TYPE=Debug \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=On \
     -Denc_wrapper_DIR="${INS_DIR}/enc_wrapper-ins/cmake" \
     -Denc_io_DIR="${INS_DIR}/enc_io-ins/cmake"

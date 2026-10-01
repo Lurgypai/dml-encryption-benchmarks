@@ -34,7 +34,9 @@ int main(int argc, char** argv) {
 
     size_t element_size = sizeof(std::int32_t);
 
-    size_t total_size_bytes = (dim0 * 1024) * (dim1 * 1024);
+    // there's a mistake in the math for the others (something about converting to chunks and then to elements incorrectly)
+    // so just divide by 4 for now
+    size_t total_size_bytes = (dim0 * 1024) * (dim1 * 1024) / 4;
     size_t total_size_elements = total_size_bytes / element_size;
 
     size_t grain_size_elements = 512 * 512;
