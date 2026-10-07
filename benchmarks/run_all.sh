@@ -34,6 +34,15 @@ elif [[ ${LIBRARY} == "adios" ]]; then
             ./run_adios.sh $c
     done
     popd > /dev/null
+elif [[ ${LIBRARY} == "enc_wrapper" ]]; then
+    pushd enc_wrapper > /dev/null
+    for c in ${CONFIG_DIR}/*; do
+        if [[ $RANK == 0 ]]; then
+            echo "running enc_wrapper benchmark on config $c"
+        fi
+            ./run_benchmark.sh $c
+    done
+    popd > /dev/null
 else
     if [[ $RANK == 0 ]]; then
         echo "Invalid library \"${LIBRARY}\""

@@ -8,3 +8,4 @@ mkdir dependencies
 ./get_lifeboat.sh
 ./get_libsodium.sh
 ./get_adios.sh
+./get_enc_wrapper.sh

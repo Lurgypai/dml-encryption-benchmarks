@@ -20,10 +20,12 @@ DATE_TIME="$(date "+%Y-%m-%d_%H:%M:%S")"
 node_counts="1"
 process_counts="16"
 
+mode="debug"
+
 for NODE_COUNT in ${node_counts}; do
     for PROCESS_COUNT in ${process_counts}; do
 
-        TAG="debug-ADIOS2-${DATE_TIME}-${NODE_COUNT}n-${PROCESS_COUNT}p"
+        TAG="${mode}-ADIOS2-${DATE_TIME}-${NODE_COUNT}n-${PROCESS_COUNT}p"
 
         echo ${TAG};
 
@@ -35,8 +37,8 @@ for NODE_COUNT in ${node_counts}; do
 
             ls
 
-            srun --nodes=$NODE_COUNT --ntasks-per-node=$PROCESS_COUNT ./run_all.sh configs/write adios
-            srun --nodes=$NODE_COUNT --ntasks-per-node=$PROCESS_COUNT ./run_all.sh configs/read adios
+            time srun --nodes=$NODE_COUNT --ntasks-per-node=$PROCESS_COUNT ./run_all.sh configs/write adios
+            time srun --nodes=$NODE_COUNT --ntasks-per-node=$PROCESS_COUNT ./run_all.sh configs/read adios
 
             pushd adios > /dev/null
                 du -sh *.bp
@@ -49,4 +51,4 @@ for NODE_COUNT in ${node_counts}; do
 done
 
 
-mv *.out "debug-adios2-${DATE_TIME}.txt"
+mv *.out "${mode}-adios2-${DATE_TIME}.txt"

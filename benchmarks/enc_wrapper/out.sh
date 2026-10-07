@@ -9,6 +9,9 @@ if [[ ! -d ${WRAPPER_DIR} ]] || [[ ! -d ${IO_DIR} ]]; then
     exit 1
 fi
 
+export GCRYPT_ROOT_DIR=${INS_DIR}/gcrypt-ins
+export GPG_ERROR_ROOT_DIR=${INS_DIR}/gpgerror-ins
+
 rm -r out
 mkdir out
 cd out

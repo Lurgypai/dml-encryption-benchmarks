@@ -18,7 +18,7 @@ export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:$GCRYPT_INS_DIR"
 NODE_COUNT=1
 PROCESS_COUNT=1
 
-mode="all"
+mode="all-write"
 
 TAG="${mode}-Lifeboat-$(date "+%Y-%m-%d_%H:%M:%S")-${NODE_COUNT}n-${PROCESS_COUNT}p"
 

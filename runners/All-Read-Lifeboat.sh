@@ -18,7 +18,7 @@ export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:$GCRYPT_INS_DIR"
 NODE_COUNT=1
 PROCESS_COUNT=1
 
-mode="all"
+mode="all-read"
 
 TAG="${mode}-Lifeboat-$(date "+%Y-%m-%d_%H:%M:%S")-${NODE_COUNT}n-${PROCESS_COUNT}p"
 
@@ -34,7 +34,6 @@ pushd ../benchmarks >> /dev/null
     pushd lifeboat
         du -sh *.h5
         head *.h5
-        ./clean_outputs.sh
     popd
 
     mv output ../runners/${TAG}-output

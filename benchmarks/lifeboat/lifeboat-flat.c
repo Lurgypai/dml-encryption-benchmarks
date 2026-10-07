@@ -7,6 +7,13 @@
 #include <stdlib.h>
 #include <time.h>
 
+static double wall_time(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (double)ts.tv_sec + (double)ts.tv_nsec * 1e-9;
+}
+
 #define DATASET "DS1"
 
 static hid_t prepare_def() {
@@ -128,22 +135,22 @@ int main(int argc, char** argv)
     int x_steps = DIM0 / CHUNK_DIM;
     int y_steps = DIM1 / CHUNK_DIM;
 
-    clock_t start, end;
-    double elapsed;
+    double start, end, elapsed;
 
     hid_t ioSpace = H5Screate_simple(2, ioDims, NULL);
 
     if(doWrite) {
-        file = H5Fcreate(FILE, H5F_ACC_TRUNC, H5P_DEFAULT, fapl_id);
-        space = H5Screate_simple(2, dims, NULL);
-        dset = H5Dcreate(file, DATASET, H5T_NATIVE_INT, space, H5P_DEFAULT, dcpl_id, H5P_DEFAULT);
-
         int* buffer = malloc(CHUNK_SIZE * sizeof(int));
         for(int i = 0; i != CHUNK_SIZE; ++i) {
             buffer[i] = i;
         }
 
-        start = clock();
+        start = wall_time();
+
+        file = H5Fcreate(FILE, H5F_ACC_TRUNC, H5P_DEFAULT, fapl_id);
+        space = H5Screate_simple(2, dims, NULL);
+        dset = H5Dcreate(file, DATASET, H5T_NATIVE_INT, space, H5P_DEFAULT, dcpl_id, H5P_DEFAULT);
+
         for(int y_pos = 0; y_pos != y_steps; ++y_pos) {
             for(int x_pos = 0; x_pos != x_steps; ++x_pos) {
                 int x_off = x_pos * CHUNK_DIM, y_off = y_pos * CHUNK_DIM;
@@ -161,13 +168,14 @@ int main(int argc, char** argv)
                 status = H5Dwrite(dset, H5T_NATIVE_INT, ioSpace, space, H5P_DEFAULT, buffer);
             }
         }
-        end = clock();
 
         status = H5Dclose(dset);
         status = H5Sclose(space);
         status = H5Fclose(file);
 
-        elapsed = (double)(end - start) / CLOCKS_PER_SEC;
+        end = wall_time();
+
+        elapsed = end - start;
         printf("Write: %f\n", elapsed);
     }
 
@@ -177,12 +185,12 @@ int main(int argc, char** argv)
         int* buffer = malloc(CHUNK_SIZE * sizeof(int));
         for(int i = 0; i != CHUNK_SIZE; ++i) buffer[i] = 0;
 
+        start = wall_time();
+
         // open and read
         file = H5Fopen(FILE, H5F_ACC_RDONLY, fapl_id);
         dset = H5Dopen(file, DATASET, H5P_DEFAULT);
         space = H5Dget_space(dset);
-
-        start = clock();
 
         for(int y_pos = 0; y_pos != y_steps; ++y_pos) {
             for(int x_pos = 0; x_pos != x_steps; ++x_pos) {
@@ -202,9 +210,10 @@ int main(int argc, char** argv)
                 status = H5Dread(dset, H5T_NATIVE_INT, ioSpace, space, H5P_DEFAULT, buffer);
             }
         }
-        end = clock();
 
-        elapsed = (double)(end - start) / CLOCKS_PER_SEC;
+        end = wall_time();
+        
+        elapsed = end - start;
         printf("Read: %f\n", elapsed);
 
         // cleanup

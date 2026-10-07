@@ -18,7 +18,7 @@ export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:$GCRYPT_INS_DIR"
 
 DATE_TIME="$(date "+%Y-%m-%d_%H:%M:%S")"
 
-node_counts="8 16 32 64"
+node_counts="2 4 8 16 32 64"
 process_counts="64"
 
 for NODE_COUNT in ${node_counts}; do

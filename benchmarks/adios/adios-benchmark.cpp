@@ -29,9 +29,15 @@ constexpr std::size_t CHUNK_SIZE{ CHUNK_DIM * CHUNK_DIM };
 
 std::string FILENAME;
 
+static int getChunkValue(size_t threadOffsetY, size_t w_units, size_t threadOffsetX, size_t chunkOffsetY, size_t w_chunks, size_t chunkOffsetX, size_t unit_id) {
+    //      the global offset that this thread uses          the offset of the chunk we're writing into the thread          the offset of the value in the chunk
+    return (threadOffsetY * w_units + threadOffsetX) + (chunkOffsetY * w_chunks + chunkOffsetX) * CHUNK_SIZE + unit_id;
+}
+
 void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int w_chunks, int h_chunks, int my_w_chunks, int my_h_chunks)
 {
 
+    // prepare selection
     size_t w_units = w_chunks * CHUNK_DIM;
     size_t h_units = h_chunks * CHUNK_DIM;
 
@@ -41,7 +47,7 @@ void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int w_chunks, int h_c
     size_t threadOffsetX = 0;
     size_t threadOffsetY = my_h_units * rank;
 
-    adios2::IO io = adios.DeclareIO("hello-world-writer");
+    adios2::IO io = adios.DeclareIO("writer");
     adios2::Variable<std::int32_t> var = io.DefineVariable<std::int32_t>(
         "Var",
         {w_units, h_units},                    // base dimensions
@@ -60,34 +66,63 @@ void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int w_chunks, int h_c
         var.AddOperation("plugin", params);
     }
 
+
+    // open
     adios2::Engine writer = io.Open(FILENAME, adios2::Mode::Write);
 
+
+    // allocate space
     std::vector<std::int32_t> data;
     data.resize(CHUNK_SIZE);
-    for(int i = 0; i != CHUNK_SIZE; ++i) {
-        data[i] = i;
-    }
 
+
+    // perform io
+    double putTime = 0.0;
     writer.BeginStep();
 
     int ySteps = my_h_chunks;
     int xSteps = my_w_chunks;
     for(int yStep = 0; yStep != ySteps; ++yStep) {
         for(int xStep = 0; xStep != xSteps; ++xStep) {
+
+            // set data buffer
+            for(int i = 0; i != data.size(); ++i) {
+                data[i] = getChunkValue(threadOffsetY, w_units, threadOffsetX, yStep, w_chunks, xStep, i);
+            }
+
+            // select io region
             adios2::Box<adios2::Dims> sel({xStep * CHUNK_DIM + threadOffsetX, yStep * CHUNK_DIM + threadOffsetY}, {CHUNK_DIM, CHUNK_DIM});
             var.SetSelection(sel);
-            writer.Put(var, data.data());
+
+            MPI_Barrier(MPI_COMM_WORLD);
+
+            // perform and time io
+            auto start = high_resolution_clock::now();
+            writer.Put(var, data.data(), adios2::Mode::Sync);
+            duration<double> elapsed = high_resolution_clock::now() - start;
+            putTime += elapsed.count();
         }
         // writer.PerformDataWrite();
     }
 
+    auto start = high_resolution_clock::now();
+    MPI_Barrier(MPI_COMM_WORLD);
+
     writer.EndStep();
     writer.Close();
+
+    duration<double> endCloseTime = high_resolution_clock::now() - start;
+
+    if(rank == 0) {
+        std::cout << "Put Time (s): " << putTime << '\n';
+        std::cout << "End/Close Time (s): " << endCloseTime.count() << '\n';
+    }
 }
 
 void doRead(adios2::ADIOS &adios, bool doCrypt, int rank, int my_w_chunks, int my_h_chunks)
 {
-    adios2::IO io = adios.DeclareIO("hello-world-reader");
+    // open file
+    adios2::IO io = adios.DeclareIO("reader");
     if(doCrypt) {
         io.SetEngine("BPFile");
     }
@@ -98,30 +133,93 @@ void doRead(adios2::ADIOS &adios, bool doCrypt, int rank, int my_w_chunks, int m
         params["PluginName"] = "cryptop";
         params["PluginLibrary"] = "EncryptionOperator";
         params["SecretKeyFile"] = "secret-key";
+        params["debug_rank"] = std::to_string(rank);
         var.AddOperation("plugin", params);
     }
 
-
     std::vector<std::int32_t> data;
+
+    double getTime = 0;
 
     int ySteps = my_h_chunks;
     int xSteps = my_w_chunks;
-    int threadOffsetX = 0;
-    int threadOffsetY = my_h_chunks * CHUNK_DIM * rank;
+    size_t threadOffsetX = 0;
+    size_t threadOffsetY = my_h_chunks * CHUNK_DIM * rank;
     for(int yStep = 0; yStep != ySteps; ++yStep) {
         for(int xStep = 0; xStep != xSteps; ++xStep) {
             adios2::Box<adios2::Dims> sel({xStep * CHUNK_DIM + threadOffsetX, yStep * CHUNK_DIM + threadOffsetY}, {CHUNK_DIM, CHUNK_DIM});
             var.SetSelection(sel);
-            reader.Get(var, data);
+
+            MPI_Barrier(MPI_COMM_WORLD);
+
+            auto start = high_resolution_clock::now();
+            reader.Get(var, data, adios2::Mode::Sync);
+            duration<double> elapsed = high_resolution_clock::now() - start;
+            getTime += elapsed.count();
         }
     }
 
     reader.EndStep();
     reader.Close();
+
+    if(rank == 0) std::cout << "Get Time (s): " << getTime << '\n';
 }
 
+void doValidate(adios2::ADIOS &adios, bool doCrypt, int rank, int w_chunks, int my_w_chunks, int my_h_chunks)
+{
+    if(rank == 0) std::cout << "Performing validation..." << std::endl;
+
+    // open file
+    adios2::IO io = adios.DeclareIO("validater");
+    if(doCrypt) {
+        io.SetEngine("BPFile");
+    }
+    adios2::Engine reader = io.Open(FILENAME, adios2::Mode::Read);
+    reader.BeginStep(); adios2::Variable<std::int32_t> var = io.InquireVariable<std::int32_t>("Var");
+    if(doCrypt) {
+        adios2::Params params;
+        params["PluginName"] = "cryptop";
+        params["PluginLibrary"] = "EncryptionOperator";
+        params["SecretKeyFile"] = "secret-key";
+        params["debug_rank"] = std::to_string(rank);
+        var.AddOperation("plugin", params);
+    }
+
+    size_t w_units = w_chunks * CHUNK_DIM;
+
+    std::vector<std::int32_t> data;
+
+    double getTime = 0;
+
+    int ySteps = my_h_chunks;
+    int xSteps = my_w_chunks;
+    size_t threadOffsetX = 0;
+    size_t threadOffsetY = my_h_chunks * CHUNK_DIM * rank;
+    for(int yStep = 0; yStep != ySteps; ++yStep) {
+        for(int xStep = 0; xStep != xSteps; ++xStep) {
+            adios2::Box<adios2::Dims> sel({xStep * CHUNK_DIM + threadOffsetX, yStep * CHUNK_DIM + threadOffsetY}, {CHUNK_DIM, CHUNK_DIM});
+            var.SetSelection(sel);
+
+            reader.Get(var, data, adios2::Mode::Sync);
+
+            for(int i = 0; i != data.size(); ++i) {
+                if(data[i] != getChunkValue(threadOffsetY, w_units, threadOffsetX, yStep, w_chunks, xStep, i)) {
+                    std::cerr << "ERROR: Rank " << rank << " detected invalid data, xStep: " << xStep << ", yStep: " << yStep << ", offset: " << i << std::endl;
+                    std::cerr << "\tExpected: " << getChunkValue(threadOffsetY, w_units, threadOffsetX, yStep, w_chunks, xStep, i) << std::endl;
+                    std::cerr << "\tReceived: " << data[i] << std::endl;
+                }
+            }
+        }
+    }
+
+    reader.EndStep();
+    reader.Close();
+    
+    if(rank == 0) std::cout << "Validation complete." << std::endl;
+}
 int main(int argc, char *argv[])
 {
+    auto totalStart = high_resolution_clock::now();
 
     MPI_Init(&argc, &argv);
 
@@ -193,18 +291,15 @@ int main(int argc, char *argv[])
 
         // do and time write
         if( modeWrite ) {
-            auto start = high_resolution_clock::now();
             doWrite(adios, doCrypt, rank, w_chunks, h_chunks, my_w_chunks, my_h_chunks);
-            MPI_Barrier(MPI_COMM_WORLD);
-            duration<double> elapsed = high_resolution_clock::now() - start;
-            if(rank == 0) std::cout << "Write: " << elapsed.count() << '\n';
         } else {
-            auto start = high_resolution_clock::now();
             doRead(adios, doCrypt, rank, my_w_chunks, my_h_chunks);
-            MPI_Barrier(MPI_COMM_WORLD);
-            duration<double> elapsed = high_resolution_clock::now() - start;
-            if(rank == 0) std::cout << "Read: " << elapsed.count() << '\n';
         }
+
+        auto validateStart = high_resolution_clock::now();
+        doValidate(adios, doCrypt, rank, w_chunks, my_w_chunks, my_h_chunks);
+        duration<double> validateTime = high_resolution_clock::now() - validateStart;
+        if(rank == 0) std::cout << "Validation time (s): " << validateTime.count() << std::endl;
     }
     catch (std::exception &e)
     {
@@ -212,6 +307,9 @@ int main(int argc, char *argv[])
         MPI_Abort(MPI_COMM_WORLD, -1);
     }
 
+
     MPI_Finalize();
+    duration<double> totalTime = high_resolution_clock::now() - totalStart;
+    if(rank == 0) std::cout << "Total Runtime (s): " << totalTime.count() << std::endl;
     return 0;
 }
