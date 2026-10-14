@@ -47,6 +47,8 @@ void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int w_chunks, int h_c
     size_t threadOffsetX = 0;
     size_t threadOffsetY = my_h_units * rank;
 
+    auto openStart = high_resolution_clock::now();
+
     adios2::IO io = adios.DeclareIO("writer");
     adios2::Variable<std::int32_t> var = io.DefineVariable<std::int32_t>(
         "Var",
@@ -70,6 +72,8 @@ void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int w_chunks, int h_c
     // open
     adios2::Engine writer = io.Open(FILENAME, adios2::Mode::Write);
 
+    duration<double> openTime = high_resolution_clock::now() - openStart;
+    if(rank == 0) std::cout << openTime.count() << ", ";
 
     // allocate space
     std::vector<std::int32_t> data;
@@ -99,6 +103,7 @@ void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int w_chunks, int h_c
             // perform and time io
             auto start = high_resolution_clock::now();
             writer.Put(var, data.data(), adios2::Mode::Sync);
+            writer.PerformDataWrite();
             duration<double> elapsed = high_resolution_clock::now() - start;
             putTime += elapsed.count();
         }
@@ -114,13 +119,15 @@ void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int w_chunks, int h_c
     duration<double> endCloseTime = high_resolution_clock::now() - start;
 
     if(rank == 0) {
-        std::cout << "Put Time (s): " << putTime << '\n';
-        std::cout << "End/Close Time (s): " << endCloseTime.count() << '\n';
+        std::cout << putTime << ", ";
+        std::cout << endCloseTime.count() << ", ";
     }
 }
 
 void doRead(adios2::ADIOS &adios, bool doCrypt, int rank, int my_w_chunks, int my_h_chunks)
 {
+    auto openStart = high_resolution_clock::now();
+
     // open file
     adios2::IO io = adios.DeclareIO("reader");
     if(doCrypt) {
@@ -136,6 +143,9 @@ void doRead(adios2::ADIOS &adios, bool doCrypt, int rank, int my_w_chunks, int m
         params["debug_rank"] = std::to_string(rank);
         var.AddOperation("plugin", params);
     }
+
+    duration<double> openTime = high_resolution_clock::now() - openStart;
+    if(rank == 0) std::cout << openTime.count() << ", ";
 
     std::vector<std::int32_t> data;
 
@@ -159,15 +169,18 @@ void doRead(adios2::ADIOS &adios, bool doCrypt, int rank, int my_w_chunks, int m
         }
     }
 
+    auto endCloseStart = high_resolution_clock::now();
     reader.EndStep();
     reader.Close();
+    duration<double> endCloseTime = high_resolution_clock::now() - endCloseStart;
 
-    if(rank == 0) std::cout << "Get Time (s): " << getTime << '\n';
+    if(rank == 0) std::cout << getTime << ", ";
+    if(rank == 0) std::cout << endCloseTime.count() << ", ";
 }
 
 void doValidate(adios2::ADIOS &adios, bool doCrypt, int rank, int w_chunks, int my_w_chunks, int my_h_chunks)
 {
-    if(rank == 0) std::cout << "Performing validation..." << std::endl;
+    // if(rank == 0) std::cout << "Performing validation..." << std::endl;
 
     // open file
     adios2::IO io = adios.DeclareIO("validater");
@@ -215,7 +228,7 @@ void doValidate(adios2::ADIOS &adios, bool doCrypt, int rank, int w_chunks, int 
     reader.EndStep();
     reader.Close();
     
-    if(rank == 0) std::cout << "Validation complete." << std::endl;
+    // if(rank == 0) std::cout << "Validation complete." << std::endl;
 }
 int main(int argc, char *argv[])
 {
@@ -275,10 +288,12 @@ int main(int argc, char *argv[])
     std::uint64_t my_w_chunks = w_chunks;
     std::uint64_t my_h_chunks = h_chunks / rank_count;
 
+    /*
     if(rank == 0) {
         std::cout << "Ranks: " << rank_count << ", w_kbytes: " << w_kbytes << ", h_kbytes: " << h_kbytes << ", per rank w: "
             << my_w_chunks * CHUNK_DIM_BYTES << ", per rank h: " << my_h_chunks * CHUNK_DIM_BYTES << std::endl;
     }
+    */
 
 
     MPI_Barrier(MPI_COMM_WORLD);
@@ -299,7 +314,7 @@ int main(int argc, char *argv[])
         auto validateStart = high_resolution_clock::now();
         doValidate(adios, doCrypt, rank, w_chunks, my_w_chunks, my_h_chunks);
         duration<double> validateTime = high_resolution_clock::now() - validateStart;
-        if(rank == 0) std::cout << "Validation time (s): " << validateTime.count() << std::endl;
+        if(rank == 0) std::cout << validateTime.count() << ", ";
     }
     catch (std::exception &e)
     {
@@ -310,6 +325,6 @@ int main(int argc, char *argv[])
 
     MPI_Finalize();
     duration<double> totalTime = high_resolution_clock::now() - totalStart;
-    if(rank == 0) std::cout << "Total Runtime (s): " << totalTime.count() << std::endl;
+    if(rank == 0) std::cout << totalTime.count() << std::endl;
     return 0;
 }

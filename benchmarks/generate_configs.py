@@ -10,9 +10,13 @@ io_directions = ["read", "write"]
 # numbers are dimensions, and they're multiplied times a 1024x1024 square.
 
 # adios2 (256g -> 2T)
-dims0 = [128, 256, 512, 1024]
+# dims0 = [128, 256, 512, 1024]
 # minimum number of bytes for each rank to have a row with 4096 ranks
-dims1 = [8192]
+# dims1 = [8192]
+
+# adios2 small (exstsy)
+dims0 = [64, 128, 256, 512]
+dims1 = [1024]
 
 # lifeboat
 # dims0 = [64, 128, 256]
