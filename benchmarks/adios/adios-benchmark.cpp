@@ -81,8 +81,10 @@ void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int w_chunks, int h_c
 
 
     // perform io
-    double putTime = 0.0;
     writer.BeginStep();
+
+    auto writeStart = high_resolution_clock::now();
+    MPI_Barrier(MPI_COMM_WORLD);
 
     int ySteps = my_h_chunks;
     int xSteps = my_w_chunks;
@@ -98,28 +100,23 @@ void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int w_chunks, int h_c
             adios2::Box<adios2::Dims> sel({xStep * CHUNK_DIM + threadOffsetX, yStep * CHUNK_DIM + threadOffsetY}, {CHUNK_DIM, CHUNK_DIM});
             var.SetSelection(sel);
 
-            MPI_Barrier(MPI_COMM_WORLD);
-
             // perform and time io
-            auto start = high_resolution_clock::now();
             writer.Put(var, data.data(), adios2::Mode::Sync);
             writer.PerformDataWrite();
-            duration<double> elapsed = high_resolution_clock::now() - start;
-            putTime += elapsed.count();
         }
         // writer.PerformDataWrite();
     }
 
-    auto start = high_resolution_clock::now();
     MPI_Barrier(MPI_COMM_WORLD);
+    duration<double> writeTime = high_resolution_clock::now() - writeStart;
 
+    auto start = high_resolution_clock::now();
     writer.EndStep();
     writer.Close();
-
     duration<double> endCloseTime = high_resolution_clock::now() - start;
 
     if(rank == 0) {
-        std::cout << putTime << ", ";
+        std::cout << writeTime.count() << ", ";
         std::cout << endCloseTime.count() << ", ";
     }
 }
@@ -147,9 +144,10 @@ void doRead(adios2::ADIOS &adios, bool doCrypt, int rank, int my_w_chunks, int m
     duration<double> openTime = high_resolution_clock::now() - openStart;
     if(rank == 0) std::cout << openTime.count() << ", ";
 
-    std::vector<std::int32_t> data;
+    auto readStart = high_resolution_clock::now();
+    MPI_Barrier(MPI_COMM_WORLD);
 
-    double getTime = 0;
+    std::vector<std::int32_t> data;
 
     int ySteps = my_h_chunks;
     int xSteps = my_w_chunks;
@@ -159,22 +157,20 @@ void doRead(adios2::ADIOS &adios, bool doCrypt, int rank, int my_w_chunks, int m
         for(int xStep = 0; xStep != xSteps; ++xStep) {
             adios2::Box<adios2::Dims> sel({xStep * CHUNK_DIM + threadOffsetX, yStep * CHUNK_DIM + threadOffsetY}, {CHUNK_DIM, CHUNK_DIM});
             var.SetSelection(sel);
-
-            MPI_Barrier(MPI_COMM_WORLD);
-
-            auto start = high_resolution_clock::now();
             reader.Get(var, data, adios2::Mode::Sync);
-            duration<double> elapsed = high_resolution_clock::now() - start;
-            getTime += elapsed.count();
         }
     }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    duration<double> readTime = high_resolution_clock::now() - readStart;
 
     auto endCloseStart = high_resolution_clock::now();
     reader.EndStep();
     reader.Close();
     duration<double> endCloseTime = high_resolution_clock::now() - endCloseStart;
 
-    if(rank == 0) std::cout << getTime << ", ";
+    if(rank == 0) std::cout << readTime.count() << ", ";
     if(rank == 0) std::cout << endCloseTime.count() << ", ";
 }
 
@@ -313,6 +309,7 @@ int main(int argc, char *argv[])
 
         auto validateStart = high_resolution_clock::now();
         doValidate(adios, doCrypt, rank, w_chunks, my_w_chunks, my_h_chunks);
+        MPI_Barrier(MPI_COMM_WORLD);
         duration<double> validateTime = high_resolution_clock::now() - validateStart;
         if(rank == 0) std::cout << validateTime.count() << ", ";
     }
