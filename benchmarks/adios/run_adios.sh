@@ -39,6 +39,14 @@ fi
 if [[ ! $USE_STDOUT ]]; then
     OUT_FILE=${OUTPUT_DIR}/$(basename $config).txt
     ./out/adios-benchmark ${MODE} ${RW} ${DIM0} ${DIM1} > $OUT_FILE
+    enc_times_dir=${OUTPUT_DIR}/$(basename $config)-enc_times
+    mkdir $enc_times_dir
+    mv *-enc_times.txt $enc_times_dir
 else
     ./out/adios-benchmark ${MODE} ${RW} ${DIM0} ${DIM1}
+    echo "Enc Times:"
+    for file in *"-enc_times.txt"; do
+        echo -n "$file, "
+        cat $file
+    done
 fi
