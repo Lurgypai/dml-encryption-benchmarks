@@ -64,6 +64,7 @@ void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int w_chunks, int h_c
         params["PluginLibrary"] = "EncryptionOperator";
         params["SecretKeyFile"] = "secret-key";
         params["debug_rank"] = std::to_string(rank);
+        params["debug_mode"] = "enc";
 
         var.AddOperation("plugin", params);
     }
@@ -138,6 +139,7 @@ void doRead(adios2::ADIOS &adios, bool doCrypt, int rank, int my_w_chunks, int m
         params["PluginLibrary"] = "EncryptionOperator";
         params["SecretKeyFile"] = "secret-key";
         params["debug_rank"] = std::to_string(rank);
+        params["debug_mode"] = "dec";
         var.AddOperation("plugin", params);
     }
 
