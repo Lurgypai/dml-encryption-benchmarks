@@ -26,6 +26,7 @@ using namespace std::chrono;
 constexpr std::size_t CHUNK_DIM{512};
 constexpr std::size_t CHUNK_DIM_BYTES{CHUNK_DIM * sizeof(int32_t)};
 constexpr std::size_t CHUNK_SIZE{ CHUNK_DIM * CHUNK_DIM };
+constexpr std::size_t RANKS_PER_NODE{64};
 
 std::string FILENAME;
 
@@ -122,7 +123,7 @@ void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int w_chunks, int h_c
     }
 }
 
-void doRead(adios2::ADIOS &adios, bool doCrypt, int rank, int my_w_chunks, int my_h_chunks)
+void doRead(adios2::ADIOS &adios, bool doCrypt, int rank_count, int rank, int my_w_chunks, int my_h_chunks)
 {
     auto openStart = high_resolution_clock::now();
 
@@ -154,7 +155,7 @@ void doRead(adios2::ADIOS &adios, bool doCrypt, int rank, int my_w_chunks, int m
     int ySteps = my_h_chunks;
     int xSteps = my_w_chunks;
     size_t threadOffsetX = 0;
-    size_t threadOffsetY = my_h_chunks * CHUNK_DIM * rank;
+    size_t threadOffsetY = my_h_chunks * CHUNK_DIM * ((rank + RANKS_PER_NODE) % rank_count);
     for(int yStep = 0; yStep != ySteps; ++yStep) {
         for(int xStep = 0; xStep != xSteps; ++xStep) {
             adios2::Box<adios2::Dims> sel({xStep * CHUNK_DIM + threadOffsetX, yStep * CHUNK_DIM + threadOffsetY}, {CHUNK_DIM, CHUNK_DIM});
@@ -306,7 +307,7 @@ int main(int argc, char *argv[])
         if( modeWrite ) {
             doWrite(adios, doCrypt, rank, w_chunks, h_chunks, my_w_chunks, my_h_chunks);
         } else {
-            doRead(adios, doCrypt, rank, my_w_chunks, my_h_chunks);
+            doRead(adios, doCrypt, rank_count, rank, my_w_chunks, my_h_chunks);
         }
 
         auto validateStart = high_resolution_clock::now();
