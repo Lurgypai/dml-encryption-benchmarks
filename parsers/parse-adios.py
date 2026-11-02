@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Aggregate ADIOS2 crypt/def benchmark results into one averaged CSV.
+"""Aggregate ADIOS2 crypt/def benchmark results into one CSV.
 
 Layout expected:
   <root>/all-ADIOS2-<date>_<time>-<N>n-<P>p/
@@ -7,7 +7,7 @@ Layout expected:
       crypt-000000512-000001024-read-enc_times/ (000-enc_times.txt, 001-enc_times.txt, ...)
 
 Usage:
-  python aggregate.py /path/to/root -o results.csv
+  python aggregate.py /path/to/root -o results.csv [--stat avg|min|max|all]
 """
 import argparse
 import csv
@@ -24,9 +24,13 @@ MODE_LABEL = {"crypt": "Crypt", "def": "Default"}   # used in the name column
 
 IO_ORDER = {"write": 0, "read": 1}      # writes first
 MODE_ORDER = {"def": 0, "crypt": 1}     # def first
+STAT_ORDER = {"avg": 0, "min": 1, "max": 2}
 
-COLUMNS = ["ranks", "mode", "io dir", "open", "io", "close",
-           "validate", "total", "other", "clean_total", "enc time", "name"]
+COLUMNS = ["ranks", "mode", "io dir", "open", "io", "close", "other",
+           "validate", "total", "clean total", "enc time", "name"]
+# must match the order of "vals" in the per-run records
+VALUE_COLS = ["open", "io", "close", "validate", "total", "other", "clean total"]
+# VALUE_COLS = COLUMNS[3:10]   # open .. clean total (per-run numeric columns)
 
 
 def read_timing(path: Path):
@@ -55,7 +59,15 @@ def read_enc_times(folder: Path):
 
 
 def mean(xs):
+    xs = list(xs)
     return sum(xs) / len(xs) if xs else None
+
+
+def agg(fn, xs):
+    return fn(xs) if xs else None
+
+
+STAT_FUNCS = {"avg": mean, "min": min, "max": max}
 
 
 def main():
@@ -63,10 +75,14 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("root", type=Path, help="top-level folder containing the run directories")
     ap.add_argument("-o", "--output", type=Path, default=Path("results.csv"))
+    ap.add_argument("-s", "--stat", choices=["avg", "min", "max", "all"], default="avg",
+                    help="avg/min/max: one row per group; "
+                         "all: three rows per group (avg, min, max) with a 'stat' column "
+                         "(default: avg)")
     args = ap.parse_args()
 
-    # key -> {"timings": [[5 floats], ...], "enc": [floats]}
-    groups = defaultdict(lambda: {"timings": [], "enc": []})
+    # key -> list of per-run records
+    groups = defaultdict(list)
 
     for run_dir in sorted(p for p in args.root.iterdir() if p.is_dir()):
         m = RUN_DIR_RE.search(run_dir.name)
@@ -83,40 +99,56 @@ def main():
             key = (ranks, mode, io_dir, a, b)
 
             try:
-                groups[key]["timings"].append(read_timing(txt))
+                o, io, c, v, t = read_timing(txt)
             except ValueError as e:
                 print(f"warning: skipping {txt}: {e}", file=sys.stderr)
                 continue
 
             enc_dir = run_dir / (txt.stem + "-enc_times")
-            if enc_dir.is_dir():
-                groups[key]["enc"].extend(read_enc_times(enc_dir))
+            enc = read_enc_times(enc_dir) if enc_dir.is_dir() else []
 
+            groups[key].append({
+                # open, io, close, validate, total, other, clean total
+                "vals": [o, io, c, v, t, t - (o + io + c + v), t - v],
+                "enc": enc,
+            })
+
+    columns = COLUMNS + (["stat"] if args.stat == "all" else [])
     rows = []
-    for (ranks, mode, io_dir, a, b), data in groups.items():
-        cols = list(zip(*data["timings"]))
-        o, io, c, v, t = (mean(col) for col in cols)
-        other = t - (o + io + c + v)
-        enc = mean(data["enc"])
+
+    stats = list(STAT_ORDER) if args.stat == "all" else [args.stat]
+
+    for (ranks, mode, io_dir, a, b), runs in groups.items():
         size_gib = a * b * SIZE_UNIT / GIB
-        rows.append({
-            "_sort": (ranks, IO_ORDER[io_dir], size_gib, MODE_ORDER[mode]),
-            "ranks": ranks, "mode": mode, "io dir": io_dir,
-            "open": o, "io": io, "close": c, "validate": v, "total": t,
-            "other": other,
-            "clean_total": t - v,
-            "enc time": "" if enc is None else enc,
-            "name": f"{size_gib:g} GiB - {MODE_LABEL[mode]}",
-        })
+        all_enc = [x for r in runs for x in r["enc"]]   # every rank, every run
+
+        for stat in stats:
+            fn = STAT_FUNCS[stat]
+            row = {
+                "ranks": ranks, "mode": mode, "io dir": io_dir,
+                "name": f"{size_gib:g} GiB - {MODE_LABEL[mode]}",
+            }
+            for col, series in zip(VALUE_COLS, zip(*(r["vals"] for r in runs))):
+                row[col] = fn(series)
+            row["enc time"] = agg(fn, all_enc)
+            if args.stat == "all":
+                row["stat"] = stat
+            row["_sort"] = (STAT_ORDER[stat], ranks, IO_ORDER[io_dir], size_gib,
+                MODE_ORDER[mode])
+            rows.append(row)
+
+    for row in rows:
+        if row["enc time"] is None:
+            row["enc time"] = ""
 
     rows.sort(key=lambda r: r["_sort"])
 
     with args.output.open("w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=COLUMNS, extrasaction="ignore")
+        w = csv.DictWriter(f, fieldnames=columns, extrasaction="ignore")
         w.writeheader()
         w.writerows(rows)
 
-    print(f"wrote {len(rows)} rows to {args.output}")
+    print(f"wrote {len(rows)} rows to {args.output} (stat={args.stat})")
 
 
 if __name__ == "__main__":

@@ -50,6 +50,7 @@ void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int w_chunks, int h_c
     auto openStart = high_resolution_clock::now();
 
     adios2::IO io = adios.DeclareIO("writer");
+    io.SetParameter("DirectIO", "true");
     adios2::Variable<std::int32_t> var = io.DefineVariable<std::int32_t>(
         "Var",
         {w_units, h_units},                    // base dimensions
@@ -80,6 +81,9 @@ void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int w_chunks, int h_c
     std::vector<std::int32_t> data;
     data.resize(CHUNK_SIZE);
 
+    std::vector<double> bigVector;
+    bigVector.reserve(1024 * 1024 * 1024);
+
 
     // perform io
     writer.BeginStep();
@@ -102,8 +106,11 @@ void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int w_chunks, int h_c
             var.SetSelection(sel);
 
             // perform and time io
+            auto debugPutTimeStart = high_resolution_clock::now();
             writer.Put(var, data.data(), adios2::Mode::Sync);
             writer.PerformDataWrite();
+            duration<double> debugPutTime = high_resolution_clock::now() - debugPutTimeStart;
+            bigVector.push_back(debugPutTime.count());
         }
         // writer.PerformDataWrite();
     }
@@ -115,6 +122,10 @@ void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int w_chunks, int h_c
     writer.EndStep();
     writer.Close();
     duration<double> endCloseTime = high_resolution_clock::now() - start;
+
+    for(const auto& val : bigVector) {
+        std::cout << val << '\n';
+    }
 
     if(rank == 0) {
         std::cout << writeTime.count() << ", ";
@@ -128,6 +139,7 @@ void doRead(adios2::ADIOS &adios, bool doCrypt, int rank, int my_w_chunks, int m
 
     // open file
     adios2::IO io = adios.DeclareIO("reader");
+    io.SetParameter("DirectIO", "true");
     if(doCrypt) {
         io.SetEngine("BPFile");
     }
@@ -151,6 +163,9 @@ void doRead(adios2::ADIOS &adios, bool doCrypt, int rank, int my_w_chunks, int m
 
     std::vector<std::int32_t> data;
 
+    std::vector<double> bigVector;
+    bigVector.reserve(1024 * 1024 * 1024);
+
     int ySteps = my_h_chunks;
     int xSteps = my_w_chunks;
     size_t threadOffsetX = 0;
@@ -159,7 +174,10 @@ void doRead(adios2::ADIOS &adios, bool doCrypt, int rank, int my_w_chunks, int m
         for(int xStep = 0; xStep != xSteps; ++xStep) {
             adios2::Box<adios2::Dims> sel({xStep * CHUNK_DIM + threadOffsetX, yStep * CHUNK_DIM + threadOffsetY}, {CHUNK_DIM, CHUNK_DIM});
             var.SetSelection(sel);
+            auto debugPutTimeStart = high_resolution_clock::now();
             reader.Get(var, data, adios2::Mode::Sync);
+            duration<double> debugPutTime = high_resolution_clock::now() - debugPutTimeStart;
+            bigVector.push_back(debugPutTime.count());
         }
     }
 
@@ -171,6 +189,10 @@ void doRead(adios2::ADIOS &adios, bool doCrypt, int rank, int my_w_chunks, int m
     reader.EndStep();
     reader.Close();
     duration<double> endCloseTime = high_resolution_clock::now() - endCloseStart;
+
+    for(const auto& val : bigVector) {
+        std::cout << val << '\n';
+    }
 
     if(rank == 0) std::cout << readTime.count() << ", ";
     if(rank == 0) std::cout << endCloseTime.count() << ", ";
