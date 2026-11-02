@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# export LD_PRELOAD=$DARSHAN_BASE_DIR/lib/libdarshan.so
+
 config=$1
 
 USE_STDOUT=""
@@ -28,25 +30,29 @@ if [[ ! -e ${config} ]]; then
     exit 1
 fi
 
-# if [[ $RANK == 0 ]]; then
-    # echo "Using config file ${config}..."
-    # echo "Contents:"
-    # cat $config
-    # echo ""
-# fi
+if [[ $RANK == 0 ]]; then
+    echo "Using config file ${config}..."
+    echo "Contents:"
+    cat $config
+    echo ""
+fi
 . $config
 
 if [[ ! $USE_STDOUT ]]; then
     OUT_FILE=${OUTPUT_DIR}/$(basename $config).txt
     ./out/adios-benchmark ${MODE} ${RW} ${DIM0} ${DIM1} > $OUT_FILE
-    enc_times_dir=${OUTPUT_DIR}/$(basename $config)-enc_times
-    mkdir $enc_times_dir
-    mv *-enc_times.txt $enc_times_dir
+    if [[ $RANK == 0 ]]; then
+        enc_times_dir=${OUTPUT_DIR}/$(basename $config)-enc_times
+        mkdir $enc_times_dir
+        mv *-enc_times.txt $enc_times_dir
+    fi
 else
     ./out/adios-benchmark ${MODE} ${RW} ${DIM0} ${DIM1}
-    echo "Enc Times:"
-    for file in *"-enc_times.txt"; do
-        echo -n "$file, "
-        cat $file
-    done
+    if [[ $RANK == 0 ]]; then
+        echo "Enc Times:"
+        for file in *"-enc_times.txt"; do
+            echo -n "$file, "
+            cat $file
+        done
+    fi
 fi

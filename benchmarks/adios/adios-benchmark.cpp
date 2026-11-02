@@ -35,7 +35,7 @@ static int getChunkValue(size_t threadOffsetY, size_t w_units, size_t threadOffs
     return (threadOffsetY * w_units + threadOffsetX) + (chunkOffsetY * w_chunks + chunkOffsetX) * CHUNK_SIZE + unit_id;
 }
 
-void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int w_chunks, int h_chunks, int my_w_chunks, int my_h_chunks)
+void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank_count, int rank, int w_chunks, int h_chunks, int my_w_chunks, int my_h_chunks)
 {
 
     // prepare selection
@@ -52,6 +52,10 @@ void doWrite(adios2::ADIOS &adios, bool doCrypt, int rank, int w_chunks, int h_c
 
     adios2::IO io = adios.DeclareIO("writer");
     io.SetParameter("DirectIO", "true");
+    io.SetParameters({
+        {"AggregationType", "EveryoneWrites"},
+        {"NumAggregators", std::to_string(rank_count)}
+    });
     adios2::Variable<std::int32_t> var = io.DefineVariable<std::int32_t>(
         "Var",
         {w_units, h_units},                    // base dimensions
@@ -327,16 +331,19 @@ int main(int argc, char *argv[])
 
         // do and time write
         if( modeWrite ) {
-            doWrite(adios, doCrypt, rank, w_chunks, h_chunks, my_w_chunks, my_h_chunks);
+            doWrite(adios, doCrypt, rank_count, rank, w_chunks, h_chunks, my_w_chunks, my_h_chunks);
         } else {
             doRead(adios, doCrypt, rank_count, rank, my_w_chunks, my_h_chunks);
         }
 
+        /*
         auto validateStart = high_resolution_clock::now();
         doValidate(adios, doCrypt, rank, w_chunks, my_w_chunks, my_h_chunks);
         MPI_Barrier(MPI_COMM_WORLD);
         duration<double> validateTime = high_resolution_clock::now() - validateStart;
         if(rank == 0) std::cout << validateTime.count() << ", ";
+        */
+        if(rank == 0) std::cout << 0.0 << ", ";
     }
     catch (std::exception &e)
     {
